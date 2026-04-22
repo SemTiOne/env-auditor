@@ -23,7 +23,7 @@ def render_text(
     lines: list[str] = []
     sep = "─" * 42
 
-    lines.append(f"{c.BOLD}envcheck{c.RESET} — environment variable audit")
+    lines.append(f"{c.BOLD}env-auditor{c.RESET} — environment variable audit")
     lines.append(sep)
     lines.append("")
 

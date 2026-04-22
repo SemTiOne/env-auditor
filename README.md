@@ -1,6 +1,6 @@
-# env-auditor
+# env-check
 
-[![CI](https://github.com/SemTiOne/env-auditor/actions/workflows/ci.yml/badge.svg)](https://github.com/SemTiOne/env-auditor/actions)
+[![CI](https://github.com/SemTiOne/env-check/actions/workflows/ci.yml/badge.svg)](https://github.com/SemTiOne/env-check/actions)
 [![PyPI](https://img.shields.io/pypi/v/env-auditor.svg)](https://pypi.org/project/env-auditor/)
 [![Python](https://img.shields.io/pypi/pyversions/env-auditor.svg)](https://pypi.org/project/env-auditor/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -49,7 +49,7 @@ Requires Python 3.10+. **Zero runtime dependencies** — pure stdlib.
 
 ```bash
 # Audit current directory against .env.example (default)
-envcheck
+env-auditor
 
 # Audit a specific project
 env-auditor /path/to/project
@@ -180,11 +180,11 @@ For monorepos, run per-service:
 ## Development
 
 ```bash
-git clone https://github.com/SemTiOne/env-check
-cd env-check
+git clone https://github.com/SemTiOne/env-auditor
+cd env-auditor
 pip install -e .
 pip install pytest pytest-cov
-pytest --cov=env-auditor --cov-report=term-missing
+pytest --cov=env_auditor --cov-report=term-missing
 ```
 
 ## License

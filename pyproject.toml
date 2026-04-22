@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "env-check"
+name = "env-auditor"
 version = "0.1.0"
 description = "Audit environment variable consistency across a codebase."
 readme = "README.md"
@@ -30,8 +30,8 @@ dependencies = []
 env-auditor = "env_auditor.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/SemTiOne/env-auditor"
-Issues = "https://github.com/SemTiOne/env-auditor/issues"
+Homepage = "https://github.com/SemTiOne/env-check"
+Issues = "https://github.com/SemTiOne/env-check/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/env_auditor"]
