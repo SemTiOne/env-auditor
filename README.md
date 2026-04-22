@@ -1,4 +1,4 @@
-# env-check
+# env-auditor
 
 [![CI](https://github.com/SemTiOne/env-check/actions/workflows/ci.yml/badge.svg)](https://github.com/SemTiOne/env-check/actions)
 [![PyPI](https://img.shields.io/pypi/v/env-auditor.svg)](https://pypi.org/project/env-auditor/)
