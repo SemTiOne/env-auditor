@@ -1,6 +1,6 @@
 # env-auditor
 
-[![CI](https://github.com/SemTiOne/env-check/actions/workflows/ci.yml/badge.svg)](https://github.com/SemTiOne/env-check/actions)
+[![CI](https://github.com/SemTiOne/env-auditor/actions/workflows/ci.yml/badge.svg)](https://github.com/SemTiOne/env-auditor/actions)
 [![PyPI](https://img.shields.io/pypi/v/env-auditor.svg)](https://pypi.org/project/env-auditor/)
 [![Python](https://img.shields.io/pypi/pyversions/env-auditor.svg)](https://pypi.org/project/env-auditor/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -154,18 +154,18 @@ jobs:
 Save the report as a CI artifact:
 
 ```yaml
-- run: env-auditor --format json > envcheck-report.json || true
+- run: env-auditor --format json > env-auditor-report.json || true
 - uses: actions/upload-artifact@v4
   with:
-    name: envcheck-report
-    path: envcheck-report.json
+    name: env-auditor-report
+    path: env-auditor-report.json
 ```
 
 For monorepos, run per-service:
 
 ```yaml
-- run: envcheck services/api --env services/api/.env.example
-- run: envcheck services/worker --env services/worker/.env.example
+- run: env-auditor services/api --env services/api/.env.example
+- run: env-auditor services/worker --env services/worker/.env.example
 ```
 
 ## Security
