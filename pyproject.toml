@@ -1,0 +1,84 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "envcheck"
+version = "0.1.0"
+description = "Audit environment variable consistency across a codebase."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+keywords = ["cli", "env", "dotenv", "devtools", "audit"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Build Tools",
+  "Topic :: Utilities",
+]
+
+# No runtime dependencies — stdlib only.
+dependencies = []
+
+[project.scripts]
+envcheck = "envcheck.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/SemTiOne/env-check"
+Issues = "https://github.com/SemTiOne/env-check/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/envcheck"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/",
+  "tests/",
+  "README.md",
+  "pyproject.toml",
+]
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Dev / test dependencies
+# ──────────────────────────────────────────────────────────────────────────────
+
+[tool.hatch.envs.default]
+dependencies = [
+  "pytest>=7.4",
+  "pytest-cov>=4.1",
+]
+
+[tool.hatch.envs.default.scripts]
+test = "pytest --cov=envcheck --cov-report=term-missing {args}"
+test-ci = "pytest --cov=envcheck --cov-report=term-missing --cov-fail-under=85 {args}"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# pytest configuration
+# ──────────────────────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Coverage configuration
+# ──────────────────────────────────────────────────────────────────────────────
+
+[tool.coverage.run]
+source = ["envcheck"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "if __name__ == .__main__.:",
+  "raise NotImplementedError",
+]
+show_missing = true
