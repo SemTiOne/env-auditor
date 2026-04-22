@@ -1,5 +1,0 @@
-# envcheck configuration
-# https://github.com/SemTiOne/env-check
-
-# Suppress internal tool variables that envcheck reads from the environment
-ignore_keys = ["NO_COLOR", "FORCE_COLOR"]
