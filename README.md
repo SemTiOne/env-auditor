@@ -1,6 +1,6 @@
 # env-auditor
 
-[![CI](https://github.com/SemTiOne/env-check/actions/workflows/ci.yml/badge.svg)](https://github.com/SemTiOne/env-check/actions)
+[![CI](https://github.com/SemTiOne/env-auditor/actions/workflows/ci.yml/badge.svg)](https://github.com/SemTiOne/env-auditor/actions)
 [![PyPI](https://img.shields.io/pypi/v/env-auditor.svg)](https://pypi.org/project/env-auditor/)
 [![Python](https://img.shields.io/pypi/pyversions/env-auditor.svg)](https://pypi.org/project/env-auditor/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
