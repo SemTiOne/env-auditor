@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "envcheck"
+name = "env-check"
 version = "0.1.0"
 description = "Audit environment variable consistency across a codebase."
 readme = "README.md"
@@ -27,14 +27,14 @@ classifiers = [
 dependencies = []
 
 [project.scripts]
-envcheck = "envcheck.cli:main"
+env-auditor = "env_auditor.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/SemTiOne/env-check"
 Issues = "https://github.com/SemTiOne/env-check/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/envcheck"]
+packages = ["src/env_auditor"]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -55,8 +55,8 @@ dependencies = [
 ]
 
 [tool.hatch.envs.default.scripts]
-test = "pytest --cov=envcheck --cov-report=term-missing {args}"
-test-ci = "pytest --cov=envcheck --cov-report=term-missing --cov-fail-under=85 {args}"
+test = "pytest --cov=env_auditor --cov-report=term-missing {args}"
+test-ci = "pytest --cov=env_auditor --cov-report=term-missing --cov-fail-under=85 {args}"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # pytest configuration
@@ -71,7 +71,7 @@ addopts = "-v"
 # ──────────────────────────────────────────────────────────────────────────────
 
 [tool.coverage.run]
-source = ["envcheck"]
+source = ["env_auditor"]
 branch = true
 
 [tool.coverage.report]

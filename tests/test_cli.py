@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from envcheck.cli import main
+from env_auditor.cli import main
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -358,7 +358,7 @@ def test_config_file_strict_via_envcheckrc(tmp_path):
         code='import os\nurl = os.environ["USED_KEY"]\n',
         env_content="USED_KEY=val\nSTALE_KEY=old\n",
     )
-    (tmp_path / ".envcheckrc").write_text("strict = true\n", encoding="utf-8")
+    (tmp_path / ".env-auditorrc").write_text("strict = true\n", encoding="utf-8")
     with pytest.raises(SystemExit) as exc:
         main([str(tmp_path), "--env", str(tmp_path / ".env.example")])
     assert exc.value.code == 1
@@ -370,7 +370,7 @@ def test_config_file_ignore_keys(tmp_path, capsys):
         code='import os\nos.environ["IGNORED_KEY"]\nos.environ["REAL_KEY"]\n',
         env_content="REAL_KEY=val\n",
     )
-    (tmp_path / ".envcheckrc").write_text('ignore_keys = ["IGNORED_KEY"]\n', encoding="utf-8")
+    (tmp_path / ".env-auditorrc").write_text('ignore_keys = ["IGNORED_KEY"]\n', encoding="utf-8")
     with pytest.raises(SystemExit) as exc:
         main([str(tmp_path), "--env", str(tmp_path / ".env.example"), "--no-color"])
     # IGNORED_KEY is suppressed, REAL_KEY is documented -> should pass

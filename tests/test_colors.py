@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from envcheck.colors import Colors, NoColors, get_colors, supports_color
+from env_auditor.colors import Colors, NoColors, get_colors, supports_color
 
 
 def test_colors_has_ansi_codes():

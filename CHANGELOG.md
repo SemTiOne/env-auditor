@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--format json` for machine-readable output
 - `--exclude` flag for additional directories to skip
 - `--no-color` flag and `NO_COLOR` / `FORCE_COLOR` env var support
-- Config file support via `.envcheckrc`, `envcheck.toml`, or `[tool.envcheck]` in `pyproject.toml`
+- Config file support via `.env-auditorrc`, `env-auditor.toml`, or `[tool.env-auditor]` in `pyproject.toml`
 - `ignore_keys` config option to suppress specific variable names
 - `required_keys` config option to enforce documentation of specific variables
 - `--config` flag to specify an explicit config file path

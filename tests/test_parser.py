@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from envcheck.parser import parse_env_file, parse_env_files, ParsedEnvFile
+from env_auditor.parser import parse_env_file, parse_env_files, ParsedEnvFile
 
 
 # ──────────────────────────────────────────────────────────────────────────────

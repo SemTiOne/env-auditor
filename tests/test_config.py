@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from envcheck.config import (
+from env_auditor.config import (
     EnvCheckConfig,
     _dict_to_config,
     _minimal_toml_parse,
@@ -18,7 +18,7 @@ from envcheck.config import (
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
-def write_rc(tmp_path: Path, content: str, name: str = ".envcheckrc") -> Path:
+def write_rc(tmp_path: Path, content: str, name: str = ".env-auditorrc") -> Path:
     p = tmp_path / name
     p.write_text(textwrap.dedent(content), encoding="utf-8")
     return p
@@ -37,7 +37,7 @@ def test_load_config_no_file_returns_defaults(tmp_path):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# .envcheckrc parsing
+# .env-auditorrc parsing
 # ──────────────────────────────────────────────────────────────────────────────
 
 def test_load_envcheckrc_basic(tmp_path):
@@ -98,13 +98,13 @@ def test_load_envcheckrc_comments_ignored(tmp_path):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# pyproject.toml [tool.envcheck]
+# pyproject.toml [tool.env-auditor]
 # ──────────────────────────────────────────────────────────────────────────────
 
 def test_load_pyproject_toml_section(tmp_path):
     p = tmp_path / "pyproject.toml"
     p.write_text(
-        '[tool.envcheck]\nstrict = true\nformat = "json"\n',
+        '[tool.env-auditor]\nstrict = true\nformat = "json"\n',
         encoding="utf-8",
     )
     cfg = load_config(tmp_path)
@@ -211,25 +211,25 @@ def test_minimal_toml_parse_ignores_blank_lines(tmp_path):
 # ──────────────────────────────────────────────────────────────────────────────
 
 def test_dict_to_config_valid(tmp_path):
-    p = tmp_path / ".envcheckrc"
+    p = tmp_path / ".env-auditorrc"
     cfg = _dict_to_config({"strict": True, "format": "json"}, p)
     assert cfg.strict is True
     assert cfg.format == "json"
 
 
 def test_dict_to_config_unknown_key_warns(tmp_path, capsys):
-    p = tmp_path / ".envcheckrc"
+    p = tmp_path / ".env-auditorrc"
     _dict_to_config({"nonexistent_key": "value"}, p)
     err = capsys.readouterr().err
     assert "unknown config key" in err
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# envcheck.toml filename
+# env_auditor.toml filename
 # ──────────────────────────────────────────────────────────────────────────────
 
 def test_load_envcheck_toml_filename(tmp_path):
-    p = tmp_path / "envcheck.toml"
+    p = tmp_path / "env-auditor.toml"
     p.write_text('strict = true\n', encoding="utf-8")
     cfg = load_config(tmp_path)
     assert cfg.strict is True

@@ -1,16 +1,16 @@
 # env-check
 
 [![CI](https://github.com/SemTiOne/env-check/actions/workflows/ci.yml/badge.svg)](https://github.com/SemTiOne/env-check/actions)
-[![PyPI](https://img.shields.io/pypi/v/envcheck.svg)](https://pypi.org/project/envcheck/)
-[![Python](https://img.shields.io/pypi/pyversions/envcheck.svg)](https://pypi.org/project/envcheck/)
+[![PyPI](https://img.shields.io/pypi/v/env-auditor.svg)](https://pypi.org/project/env-auditor/)
+[![Python](https://img.shields.io/pypi/pyversions/env-auditor.svg)](https://pypi.org/project/env-auditor/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **Audit environment variable consistency across your codebase.** Finds vars used in code but missing from `.env.example`, stale vars nobody references anymore, and required vars with no default value — in any language.
 
 ```
-$ envcheck .
+$ env-auditor .
 
-envcheck — environment variable audit
+env-auditor — environment variable audit
 ──────────────────────────────────────────
 
 ✗  3 undocumented variables (in code, missing from .env.example)
@@ -35,12 +35,12 @@ Result: FAIL  (exit code 1)
 
 ## Why
 
-Your `.env.example` is a contract. It tells new contributors what the app needs to run. Over time that contract drifts: someone adds `process.env.NEW_KEY` to the source and forgets to document it, or removes a feature but leaves the stale key rotting in `.env.example`. `envcheck` catches both automatically, in CI, before it becomes someone else's debugging session.
+Your `.env.example` is a contract. It tells new contributors what the app needs to run. Over time that contract drifts: someone adds `process.env.NEW_KEY` to the source and forgets to document it, or removes a feature but leaves the stale key rotting in `.env.example`. `env-auditor` catches both automatically, in CI, before it becomes someone else's debugging session.
 
 ## Installation
 
 ```bash
-pip install envcheck
+pip install env-auditor
 ```
 
 Requires Python 3.10+. **Zero runtime dependencies** — pure stdlib.
@@ -52,33 +52,33 @@ Requires Python 3.10+. **Zero runtime dependencies** — pure stdlib.
 envcheck
 
 # Audit a specific project
-envcheck /path/to/project
+env-auditor /path/to/project
 
 # Use a different env file
-envcheck --env .env.production
+env-auditor --env .env.production
 
 # Multiple env files (keys merged — union)
-envcheck --env .env.example --env .env.staging
+env-auditor --env .env.example --env .env.staging
 
 # Strict mode: fail on stale vars too
-envcheck --strict
+env-auditor --strict
 
 # JSON output for tooling / dashboards
-envcheck --format json | jq .undocumented
+env-auditor --format json | jq .undocumented
 
 # Suppress specific sections
-envcheck --ignore-stale --ignore-missing
+env-auditor --ignore-stale --ignore-missing
 
 # Exclude extra directories
-envcheck --exclude vendor --exclude third_party
+env-auditor --exclude vendor --exclude third_party
 ```
 
 ## Config file
 
-Commit a `.envcheckrc` at your project root to persist settings for your whole team:
+Commit a `.env-auditorrc` at your project root to persist settings for your whole team:
 
 ```toml
-# .envcheckrc
+# .env-auditorrc
 env_files = [".env.example", ".env.staging"]
 exclude_dirs = ["vendor", "third_party"]
 ignore_stale = false
@@ -87,10 +87,10 @@ ignore_keys = ["CI", "HOME", "USER"]
 required_keys = ["DATABASE_URL", "SECRET_KEY"]
 ```
 
-Or add it to `pyproject.toml` under `[tool.envcheck]`:
+Or add it to `pyproject.toml` under `[tool.env-auditor]`:
 
 ```toml
-[tool.envcheck]
+[tool.env-auditor]
 env_files = [".env.example"]
 strict = true
 ignore_keys = ["CI"]
@@ -117,7 +117,7 @@ Dynamic references like `process.env[someVariable]` are flagged separately — t
 |---|---|---|
 | `PATH` | Root directory to scan | `.` |
 | `--env FILE` | Env file(s) as source of truth. Repeatable. | `.env.example` |
-| `--config FILE` | Path to config file | auto-discover `.envcheckrc` |
+| `--config FILE` | Path to config file | auto-discover `.env-auditorrc` |
 | `--ignore-stale` | Suppress stale variable report | off |
 | `--ignore-missing` | Suppress empty-value report | off |
 | `--format [text\|json]` | Output format | `text` |
@@ -147,14 +147,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install envcheck
-      - run: envcheck --strict
+      - run: pip install env-auditor
+      - run: env-auditor --strict
 ```
 
 Save the report as a CI artifact:
 
 ```yaml
-- run: envcheck --format json > envcheck-report.json || true
+- run: env-auditor --format json > envcheck-report.json || true
 - uses: actions/upload-artifact@v4
   with:
     name: envcheck-report
@@ -184,7 +184,7 @@ git clone https://github.com/SemTiOne/env-check
 cd env-check
 pip install -e .
 pip install pytest pytest-cov
-pytest --cov=envcheck --cov-report=term-missing
+pytest --cov=env-auditor --cov-report=term-missing
 ```
 
 ## License

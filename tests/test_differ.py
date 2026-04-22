@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from envcheck.differ import diff_keys, DiffResult
+from env_auditor.differ import diff_keys, DiffResult
 
 
 def test_undocumented_keys():
@@ -90,9 +90,9 @@ def test_returns_frozensets():
 # ──────────────────────────────────────────────────────────────────────────────
 
 def test_ignore_keys_removes_from_undocumented():
-    from envcheck.differ import diff_keys
-    from envcheck.scanner import ScanResult
-    from envcheck.reporter import render_text, render_json
+    from env_auditor.differ import diff_keys
+    from env_auditor.scanner import ScanResult
+    from env_auditor.reporter import render_text, render_json
     import json
 
     code = frozenset({"FOO", "IGNORED"})
@@ -110,9 +110,9 @@ def test_ignore_keys_removes_from_undocumented():
 
 
 def test_ignore_keys_removes_from_stale():
-    from envcheck.differ import diff_keys
-    from envcheck.scanner import ScanResult
-    from envcheck.reporter import render_text
+    from env_auditor.differ import diff_keys
+    from env_auditor.scanner import ScanResult
+    from env_auditor.reporter import render_text
 
     code = frozenset({"FOO"})
     documented = frozenset({"FOO", "STALE_BUT_IGNORED"})
