@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from env_auditor.config import (
-    EnvCheckConfig,
+    EnvAuditorConfig,
     _dict_to_config,
     _minimal_toml_parse,
     load_config,
@@ -33,7 +33,7 @@ def test_load_config_no_file_returns_defaults(tmp_path):
     assert cfg.env_files == [".env.example"]
     assert cfg.ignore_stale is False
     assert cfg.strict is False
-    assert cfg.format == "text"
+    assert cfg.output_format == "text"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -49,7 +49,7 @@ def test_load_envcheckrc_basic(tmp_path):
     cfg = load_config(tmp_path)
     assert cfg.strict is True
     assert cfg.ignore_stale is True
-    assert cfg.format == "json"
+    assert cfg.output_format == "json"
 
 
 def test_load_envcheckrc_env_files_list(tmp_path):
@@ -109,7 +109,7 @@ def test_load_pyproject_toml_section(tmp_path):
     )
     cfg = load_config(tmp_path)
     assert cfg.strict is True
-    assert cfg.format == "json"
+    assert cfg.output_format == "json"
 
 
 def test_load_pyproject_toml_no_section_returns_defaults(tmp_path):
@@ -124,44 +124,44 @@ def test_load_pyproject_toml_no_section_returns_defaults(tmp_path):
 # ──────────────────────────────────────────────────────────────────────────────
 
 def test_merge_cli_overrides_env_files():
-    cfg = EnvCheckConfig(env_files=[".env.example"])
+    cfg = EnvAuditorConfig(env_files=[".env.example"])
     merged = merge_cli_into_config(cfg, env_files=[".env.production"])
     assert merged.env_files == [".env.production"]
 
 
 def test_merge_cli_strict_flag():
-    cfg = EnvCheckConfig(strict=False)
+    cfg = EnvAuditorConfig(strict=False)
     merged = merge_cli_into_config(cfg, strict=True)
     assert merged.strict is True
 
 
 def test_merge_cli_none_does_not_override():
-    cfg = EnvCheckConfig(strict=True)
+    cfg = EnvAuditorConfig(strict=True)
     merged = merge_cli_into_config(cfg, strict=None)
     assert merged.strict is True
 
 
 def test_merge_cli_appends_exclude_dirs():
-    cfg = EnvCheckConfig(exclude_dirs=["vendor"])
+    cfg = EnvAuditorConfig(exclude_dirs=["vendor"])
     merged = merge_cli_into_config(cfg, exclude_dirs=["generated"])
     assert "vendor" in merged.exclude_dirs
     assert "generated" in merged.exclude_dirs
 
 
 def test_merge_cli_format_override():
-    cfg = EnvCheckConfig(format="text")
-    merged = merge_cli_into_config(cfg, format="json")
-    assert merged.format == "json"
+    cfg = EnvAuditorConfig(output_format="text")
+    merged = merge_cli_into_config(cfg, output_format="json")
+    assert merged.output_format == "json"
 
 
 def test_merge_cli_ignore_stale():
-    cfg = EnvCheckConfig(ignore_stale=False)
+    cfg = EnvAuditorConfig(ignore_stale=False)
     merged = merge_cli_into_config(cfg, ignore_stale=True)
     assert merged.ignore_stale is True
 
 
 def test_merge_cli_ignore_missing():
-    cfg = EnvCheckConfig(ignore_missing=False)
+    cfg = EnvAuditorConfig(ignore_missing=False)
     merged = merge_cli_into_config(cfg, ignore_missing=True)
     assert merged.ignore_missing is True
 
@@ -212,9 +212,9 @@ def test_minimal_toml_parse_ignores_blank_lines(tmp_path):
 
 def test_dict_to_config_valid(tmp_path):
     p = tmp_path / ".env-auditorrc"
-    cfg = _dict_to_config({"strict": True, "format": "json"}, p)
+    cfg = _dict_to_config({"strict": True, "output_format": "json"}, p)
     assert cfg.strict is True
-    assert cfg.format == "json"
+    assert cfg.output_format == "json"
 
 
 def test_dict_to_config_unknown_key_warns(tmp_path, capsys):

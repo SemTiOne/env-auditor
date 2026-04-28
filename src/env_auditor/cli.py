@@ -3,16 +3,13 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from dataclasses import replace as dataclass_replace
 from pathlib import Path
 from typing import Optional
 
 from env_auditor import __version__
 from env_auditor.colors import supports_color
 from env_auditor.config import (
-    EnvCheckConfig,
-    _dict_to_config,
-    _parse_toml_file,
+    EnvAuditorConfig,
     load_config,
     merge_cli_into_config,
 )
@@ -68,6 +65,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format",
         choices=["text", "json"],
         default=None,
+        dest="output_format",
         help="Output format. Default: text",
     )
     parser.add_argument(
@@ -129,10 +127,17 @@ def _resolve_scan_root(raw_path: str) -> Path:
     Raises:
         SystemExit(2): If the path does not exist or is not a directory.
     """
+    resolved: Optional[Path] = None
     try:
         resolved = Path(raw_path).resolve()
     except (OSError, ValueError) as exc:
         _die(f"Invalid path '{raw_path}': {exc}")
+
+    # resolved is always set here — _die exits, but the type checker
+    # doesn't know that, so we guard explicitly.
+    if resolved is None:  # pragma: no cover
+        _die(f"Could not resolve path '{raw_path}'")
+
     if not resolved.exists():
         _die(f"Path does not exist: {resolved}")
     if not resolved.is_dir():
@@ -175,7 +180,8 @@ def _resolve_exclude_dirs(raw_dirs: list[str], scan_root: Path) -> list[Path]:
     """Resolve --exclude paths, rejecting any that escape the scan root.
 
     Security: path traversal is rejected — each resolved path must be
-    a descendant of scan_root.
+    a descendant of scan_root. Newlines are stripped from raw input to
+    prevent log injection.
 
     Args:
         raw_dirs: Raw directory strings from CLI or config.
@@ -186,7 +192,7 @@ def _resolve_exclude_dirs(raw_dirs: list[str], scan_root: Path) -> list[Path]:
     """
     resolved_list: list[Path] = []
     for raw in raw_dirs:
-        # Strip newlines to prevent any injection via crafted input
+        # Strip newlines to prevent log/terminal injection via crafted input
         raw_safe = re.sub(r"[\r\n]", "", raw)
         p = Path(raw_safe)
         if not p.is_absolute():
@@ -217,7 +223,7 @@ def _die(msg: str) -> None:
 # Config loading
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _build_config(args: argparse.Namespace, scan_root: Path) -> EnvCheckConfig:
+def _build_config(args: argparse.Namespace, scan_root: Path) -> EnvAuditorConfig:
     """Load config file and apply CLI overrides on top.
 
     Config file is auto-discovered in scan_root unless ``--config`` is given.
@@ -228,17 +234,15 @@ def _build_config(args: argparse.Namespace, scan_root: Path) -> EnvCheckConfig:
         scan_root: Resolved scan root.
 
     Returns:
-        Final merged EnvCheckConfig.
+        Final merged EnvAuditorConfig.
     """
     if args.config:
         config_path = Path(args.config).resolve()
         if not config_path.is_file():
             _die(f"Config file not found: {config_path}")
-        try:
-            raw = _parse_toml_file(config_path, config_path.name == "pyproject.toml")
-            cfg = _dict_to_config(raw or {}, config_path)
-        except (OSError, ValueError, KeyError) as exc:
-            _die(f"Could not parse config file {config_path}: {exc}")
+        # Load config from explicit path by temporarily treating scan_root
+        # as the config file's parent
+        cfg = load_config(config_path.parent)
     else:
         cfg = load_config(scan_root)
 
@@ -249,7 +253,7 @@ def _build_config(args: argparse.Namespace, scan_root: Path) -> EnvCheckConfig:
         ignore_stale=args.ignore_stale or None,
         ignore_missing=args.ignore_missing or None,
         strict=args.strict or None,
-        format=args.format,
+        output_format=getattr(args, "output_format", None),
     )
 
 
@@ -259,7 +263,7 @@ def _build_config(args: argparse.Namespace, scan_root: Path) -> EnvCheckConfig:
 
 def _run_audit(
     scan_root: Path,
-    cfg: EnvCheckConfig,
+    cfg: EnvAuditorConfig,
     use_color: bool,
 ) -> tuple[int, str]:
     """Execute the full audit pipeline.
@@ -293,7 +297,7 @@ def _run_audit(
     )
 
     ignore_keys: set[str] = set(cfg.ignore_keys) if cfg.ignore_keys else set()
-    fmt = cfg.format or "text"
+    fmt = cfg.output_format or "text"
 
     if fmt == "json":
         output = render_json(
@@ -331,15 +335,13 @@ def main(argv: Optional[list[str]] = None) -> None:
     """Parse arguments, run the audit, and exit with the appropriate code.
 
     Exit codes:
-        0 — clean (no undocumented vars; no stale with --strict)
+        0 — clean
         1 — undocumented variables found (or stale with --strict)
         2 — tool error (bad arguments, unreadable config, etc.)
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    # Resolve color preference before any output.
-    # --no-color disables color without mutating os.environ.
     use_color = (not args.no_color) and supports_color()
 
     scan_root = _resolve_scan_root(args.path)

@@ -16,12 +16,28 @@ from env_auditor.patterns import (
 # Skip files larger than this (bytes) to avoid memory issues
 FILE_SIZE_LIMIT = 1 * 1024 * 1024  # 1 MB
 
+# Skip config/auxiliary files larger than this
+AUX_FILE_SIZE_LIMIT = 512 * 1024  # 512 KB
+
 # Maximum line length to scan — protects against ReDoS on pathological input
 MAX_LINE_LENGTH = 2000
+
+# Cap occurrences stored per key — prevents unbounded memory on repos with
+# thousands of references to the same variable.
+MAX_OCCURRENCES_PER_KEY = 100
 
 # Pre-compiled constant — validates that a matched name is a real env var identifier.
 # Uppercase only, starts with a letter, digits and underscores allowed.
 _VALID_VAR_RE: re.Pattern[str] = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+# Matches any ANSI escape sequence or non-printable control character.
+# Used to sanitize raw dynamic references before printing to the terminal.
+_ANSI_AND_CTRL_RE: re.Pattern[str] = re.compile(
+    r"\x1b\[[0-9;]*[A-Za-z]"   # ANSI CSI sequences  e.g. \x1b[31m
+    r"|\x1b[()][AB012]"         # ANSI character set  e.g. \x1b(B
+    r"|\x1b[^[]"                # Other ESC sequences
+    r"|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\r\n]"  # Control chars incl CR+LF (CRLF injection)
+)
 
 # Default directories to always skip
 DEFAULT_SKIP_DIRS: frozenset[str] = frozenset(
@@ -57,14 +73,14 @@ class DynamicRef:
 
     file: str
     line: int
-    raw: str
+    raw: str  # Sanitized — ANSI/control chars stripped before storage
 
 
 @dataclass
 class ScanResult:
     """Aggregated result from scanning a directory."""
 
-    # key -> list of occurrences
+    # key -> list of occurrences (capped at MAX_OCCURRENCES_PER_KEY)
     references: dict[str, list[Occurrence]] = field(default_factory=dict)
     dynamic_refs: list[DynamicRef] = field(default_factory=list)
     skipped_files: list[str] = field(default_factory=list)
@@ -73,6 +89,21 @@ class ScanResult:
     def all_keys(self) -> frozenset[str]:
         """All env var names found in source code."""
         return frozenset(self.references.keys())
+
+
+def sanitize_raw(text: str) -> str:
+    """Strip ANSI escape sequences and control characters from *text*.
+
+    Prevents terminal injection when dynamic reference raw content is
+    printed to the user's terminal.
+
+    Args:
+        text: Raw string potentially containing escape sequences.
+
+    Returns:
+        Sanitized string safe to print.
+    """
+    return _ANSI_AND_CTRL_RE.sub("", text)
 
 
 def scan_directory(
@@ -86,6 +117,8 @@ def scan_directory(
     - Files over 1 MB are skipped with a warning to stderr.
     - Lines over 2000 characters are skipped (ReDoS protection).
     - No file is imported, eval'd, or executed; all reading is raw text.
+    - Dynamic reference raw content is sanitized before storage (ANSI injection).
+    - Occurrences per key are capped to prevent unbounded memory use.
     - ``extra_exclude`` paths must be within root (enforced by caller).
 
     Args:
@@ -110,7 +143,7 @@ def scan_directory(
     for dirpath_str, dirnames, filenames in os.walk(str(root), followlinks=False):
         dirpath = Path(dirpath_str)
 
-        # Prune excluded directories in-place so os.walk doesn't descend into them
+        # Prune excluded directories in-place so os.walk doesn't descend
         dirnames[:] = [
             d
             for d in dirnames
@@ -151,7 +184,8 @@ def _scan_file(filepath: Path, root: Path, result: ScanResult) -> None:
     if size > FILE_SIZE_LIMIT:
         rel = _rel(filepath, root)
         print(
-            f"env-auditor: warning: skipping {rel} (size {size} bytes exceeds 1 MB limit)",
+            f"env-auditor: warning: skipping {rel} "
+            f"(size {size} bytes exceeds 1 MB limit)",
             file=sys.stderr,
         )
         result.skipped_files.append(rel)
@@ -175,8 +209,7 @@ def _scan_file(filepath: Path, root: Path, result: ScanResult) -> None:
     lines = content.splitlines()
 
     for lineno, line in enumerate(lines, start=1):
-        # ReDoS protection: pathological inputs with very long lines could cause
-        # catastrophic backtracking in some regex engines.
+        # ReDoS protection: skip pathologically long lines
         if len(line) > MAX_LINE_LENGTH:
             continue
 
@@ -190,14 +223,16 @@ def _scan_file(filepath: Path, root: Path, result: ScanResult) -> None:
                     # Filter well-known shell builtins from shell files
                     if lang_pattern.name == "Shell" and key in SHELL_NOISE:
                         continue
-                    result.references.setdefault(key, []).append(
-                        Occurrence(file=rel_path, line=lineno)
-                    )
+                    existing = result.references.setdefault(key, [])
+                    # Cap occurrences to avoid unbounded memory on huge repos
+                    if len(existing) < MAX_OCCURRENCES_PER_KEY:
+                        existing.append(Occurrence(file=rel_path, line=lineno))
 
-            # Dynamic patterns — flag for manual review, cannot statically audit
+            # Dynamic patterns — flag for manual review
             for regex in lang_pattern.dynamic_patterns:
                 for match in regex.finditer(line):
-                    raw = match.group(0).strip()
+                    # Sanitize raw content before storage — prevents ANSI injection
+                    raw = sanitize_raw(match.group(0).strip())
                     result.dynamic_refs.append(
                         DynamicRef(file=rel_path, line=lineno, raw=raw)
                     )
@@ -231,6 +266,7 @@ def _load_gitignore_dirs(root: Path) -> set[str]:
     """Parse top-level .gitignore and return simple directory names to skip.
 
     Best-effort only — handles bare directory names, not globs or negations.
+    Skips the file if it exceeds the auxiliary file size limit.
 
     Args:
         root: Project root containing the .gitignore file.
@@ -243,7 +279,16 @@ def _load_gitignore_dirs(root: Path) -> set[str]:
     if not gitignore.is_file():
         return names
     try:
-        for line in gitignore.read_text(encoding="utf-8", errors="replace").splitlines():
+        if gitignore.stat().st_size > AUX_FILE_SIZE_LIMIT:
+            print(
+                f"env-auditor: warning: .gitignore exceeds "
+                f"{AUX_FILE_SIZE_LIMIT // 1024} KB, skipping gitignore parsing",
+                file=sys.stderr,
+            )
+            return names
+        for line in gitignore.read_text(
+            encoding="utf-8", errors="replace"
+        ).splitlines():
             line = line.strip()
             if not line or line.startswith("#") or line.startswith("!"):
                 continue

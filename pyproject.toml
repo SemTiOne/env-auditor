@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "env-auditor"
-version = "0.1.2"
+version = "0.1.4"
 description = "Audit environment variable consistency across a codebase."
 readme = "README.md"
 requires-python = ">=3.10"

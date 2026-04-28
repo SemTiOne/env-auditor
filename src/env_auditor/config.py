@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 from dataclasses import dataclass, field, replace as dataclass_replace
 from pathlib import Path
@@ -8,13 +9,16 @@ from typing import Optional
 # Config file is searched in this order within the scan root.
 CONFIG_FILENAMES = (".env-auditorrc", "env-auditor.toml", "pyproject.toml")
 
-# Key used inside pyproject.toml
-PYPROJECT_KEY = "tool.env-auditor"
+# Maximum config file size — prevents memory exhaustion from a crafted config
+CONFIG_FILE_SIZE_LIMIT = 512 * 1024  # 512 KB
+
+# Pre-compiled for _minimal_toml_parse — never constructed from user input
+_LIST_ITEMS_RE: re.Pattern[str] = re.compile(r'"([^"]*)"')
 
 
 @dataclass
-class EnvCheckConfig:
-    """Resolved configuration for an envcheck run.
+class EnvAuditorConfig:
+    """Resolved configuration for an env-auditor run.
 
     CLI flags always override config file values.
     """
@@ -34,10 +38,9 @@ class EnvCheckConfig:
     strict: bool = False
     """If True, exit 1 on stale variables too."""
 
-    format: str = "text"
-    """Output format: 'text' or 'json'."""
+    output_format: str = "text"
+    """Output format: 'text' or 'json'. Named to avoid shadowing builtin."""
 
-    # Allowlist / denylist overrides
     ignore_keys: list[str] = field(default_factory=list)
     """Specific variable names to always ignore in all categories."""
 
@@ -45,34 +48,40 @@ class EnvCheckConfig:
     """Keys that MUST be documented; always flagged if missing."""
 
 
-def load_config(scan_root: Path) -> EnvCheckConfig:
+# Keep old name as alias so existing imports don't break during transition
+EnvCheckConfig = EnvAuditorConfig
+
+
+def load_config(scan_root: Path) -> EnvAuditorConfig:
     """Search for and parse a config file within *scan_root*.
 
-    Looks for ``.env-auditorrc``, ``env-auditor.toml``, or ``[tool.envcheck]``
-    inside ``pyproject.toml``.  Returns default config if none is found.
-
-    Config file format (.env-auditorrc / env-auditor.toml — TOML):
-
-    .. code-block:: toml
-
-        env_files = [".env.example", ".env.staging"]
-        exclude_dirs = ["vendor", "third_party"]
-        ignore_stale = false
-        ignore_missing = false
-        strict = false
-        format = "text"
-        ignore_keys = ["CI", "HOME"]
-        required_keys = ["DATABASE_URL", "SECRET_KEY"]
+    Looks for ``.env-auditorrc``, ``env-auditor.toml``, or
+    ``[tool.env-auditor]`` inside ``pyproject.toml``. Returns default
+    config if none is found or if the file exceeds the size limit.
 
     Args:
         scan_root: Resolved absolute path to the project root.
 
     Returns:
-        Populated EnvCheckConfig (defaults if no config file found).
+        Populated EnvAuditorConfig (defaults if no config file found).
     """
     for filename in CONFIG_FILENAMES:
         candidate = scan_root / filename
         if not candidate.is_file():
+            continue
+
+        # Guard: size limit — prevents memory exhaustion
+        try:
+            size = candidate.stat().st_size
+        except OSError:
+            continue
+
+        if size > CONFIG_FILE_SIZE_LIMIT:
+            print(
+                f"env-auditor: warning: config file {candidate} exceeds "
+                f"{CONFIG_FILE_SIZE_LIMIT // 1024} KB size limit, skipping",
+                file=sys.stderr,
+            )
             continue
 
         try:
@@ -82,33 +91,29 @@ def load_config(scan_root: Path) -> EnvCheckConfig:
                 f"env-auditor: warning: could not parse config {candidate}: {exc}",
                 file=sys.stderr,
             )
-            return EnvCheckConfig()
+            return EnvAuditorConfig()
 
         if raw is None:
             continue
 
         return _dict_to_config(raw, candidate)
 
-    return EnvCheckConfig()
+    return EnvAuditorConfig()
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Internal helpers
-# ──────────────────────────────────────────────────────────────────────────────
 
 def _parse_toml_file(path: Path, is_pyproject: bool) -> Optional[dict]:
-    """Parse *path* as TOML and return the envcheck section, or None.
+    """Parse *path* as TOML and return the env-auditor section, or None.
 
-    Uses stdlib ``tomllib`` (Python 3.11+) or ``tomli`` fallback.
-    Falls back to a minimal hand-rolled parser for simple .env-auditorrc files
-    on Python 3.10 without tomli installed.
+    Uses stdlib ``tomllib`` (Python 3.11+) with ``tomli`` fallback,
+    then falls back to a minimal hand-rolled parser for Python 3.10
+    without tomli installed.
 
     Args:
         path: Path to the TOML file.
-        is_pyproject: If True, look for ``[tool.envcheck]`` section.
+        is_pyproject: If True, look for ``[tool.env-auditor]`` section.
 
     Returns:
-        Dict of config values, or None if the section doesn't exist.
+        Dict of config values, or None if the section does not exist.
     """
     try:
         import tomllib  # Python 3.11+
@@ -120,26 +125,19 @@ def _parse_toml_file(path: Path, is_pyproject: bool) -> Optional[dict]:
             with open(path, "rb") as f:
                 data = tomllib.load(f)
         except ImportError:
-            # Fallback: minimal key=value / key = ["list"] parser
             data = _minimal_toml_parse(path)
 
     if is_pyproject:
         tool = data.get("tool", {})
-        section = tool.get("env-auditor")
-        return section  # None if not present
-    else:
-        return data or None
+        return tool.get("env-auditor")  # None if not present
+    return data or None
 
 
 def _minimal_toml_parse(path: Path) -> dict:
     """Hand-rolled TOML subset parser for .env-auditorrc on Python 3.10.
 
-    Handles:
-    - ``key = "string"``
-    - ``key = true / false``
-    - ``key = ["a", "b"]``
-    - Comments (``#``)
-    - Blank lines
+    Handles: string, bool, list of strings, comments, blank lines.
+    Uses pre-compiled regex — never constructs patterns from user input.
 
     Args:
         path: Path to the config file.
@@ -147,8 +145,6 @@ def _minimal_toml_parse(path: Path) -> dict:
     Returns:
         Dict of parsed key/value pairs.
     """
-    import re
-
     result: dict = {}
     text = path.read_text(encoding="utf-8", errors="replace")
 
@@ -163,16 +159,13 @@ def _minimal_toml_parse(path: Path) -> dict:
         key = key.strip()
         value = value.strip()
 
-        # Boolean
         if value.lower() == "true":
             result[key] = True
         elif value.lower() == "false":
             result[key] = False
-        # List: ["a", "b", "c"]
         elif value.startswith("["):
-            items = re.findall(r'"([^"]*)"', value)
-            result[key] = items
-        # Quoted string
+            # Use pre-compiled regex — not constructed from user input
+            result[key] = _LIST_ITEMS_RE.findall(value)
         elif value.startswith('"') and value.endswith('"'):
             result[key] = value[1:-1]
         elif value.startswith("'") and value.endswith("'"):
@@ -183,20 +176,26 @@ def _minimal_toml_parse(path: Path) -> dict:
     return result
 
 
-def _dict_to_config(raw: dict, source: Path) -> EnvCheckConfig:
-    """Convert a raw dict from TOML into an EnvCheckConfig.
+def _dict_to_config(raw: dict, source: Path) -> EnvAuditorConfig:
+    """Convert a raw dict from TOML into an EnvAuditorConfig.
 
-    Unknown keys are warned about but ignored.
+    Unknown keys are warned about but ignored. Type coercion is strict —
+    invalid values are skipped with a warning rather than crashing.
 
     Args:
         raw: Parsed TOML dict.
         source: Path to the config file (for warning messages).
 
     Returns:
-        EnvCheckConfig populated from *raw*.
+        EnvAuditorConfig populated from *raw*.
     """
-    known_keys = {f.name for f in EnvCheckConfig.__dataclass_fields__.values()}  # type: ignore[attr-defined]
-    cfg = EnvCheckConfig()
+    # Map old key name 'format' to 'output_format' for backwards compat
+    if "format" in raw and "output_format" not in raw:
+        raw = dict(raw)
+        raw["output_format"] = raw.pop("format")
+
+    known_keys = set(EnvAuditorConfig.__dataclass_fields__.keys())  # type: ignore[attr-defined]
+    cfg = EnvAuditorConfig()
 
     for key, value in raw.items():
         if key not in known_keys:
@@ -206,19 +205,29 @@ def _dict_to_config(raw: dict, source: Path) -> EnvCheckConfig:
             )
             continue
 
-        expected_type = EnvCheckConfig.__dataclass_fields__[key].type  # type: ignore[attr-defined]
+        field_type = str(
+            EnvAuditorConfig.__dataclass_fields__[key].type  # type: ignore[attr-defined]
+        )
 
-        # Coerce types gracefully
         try:
-            if "bool" in str(expected_type):
+            if "bool" in field_type:
                 setattr(cfg, key, bool(value))
-            elif "list" in str(expected_type):
+            elif "list" in field_type:
                 if isinstance(value, list):
                     setattr(cfg, key, [str(v) for v in value])
                 elif isinstance(value, str):
                     setattr(cfg, key, [value])
-            elif "str" in str(expected_type):
-                setattr(cfg, key, str(value))
+            elif "str" in field_type:
+                str_value = str(value)
+                # Validate output_format against allowed values
+                if key == "output_format" and str_value not in ("text", "json"):
+                    print(
+                        f"env-auditor: warning: invalid output_format '{str_value}' "
+                        f"in {source}, using 'text'",
+                        file=sys.stderr,
+                    )
+                    str_value = "text"
+                setattr(cfg, key, str_value)
         except (TypeError, ValueError) as exc:
             print(
                 f"env-auditor: warning: invalid value for '{key}' in {source}: {exc}",
@@ -229,18 +238,18 @@ def _dict_to_config(raw: dict, source: Path) -> EnvCheckConfig:
 
 
 def merge_cli_into_config(
-    cfg: EnvCheckConfig,
+    cfg: EnvAuditorConfig,
     *,
     env_files: Optional[list[str]] = None,
     exclude_dirs: Optional[list[str]] = None,
     ignore_stale: Optional[bool] = None,
     ignore_missing: Optional[bool] = None,
     strict: Optional[bool] = None,
-    format: Optional[str] = None,
-) -> EnvCheckConfig:
+    output_format: Optional[str] = None,
+) -> EnvAuditorConfig:
     """Apply CLI overrides onto *cfg*, returning a new merged config.
 
-    CLI flags take precedence over config file values.  Only non-None
+    CLI flags take precedence over config file values. Only non-None
     arguments override the config.
 
     Args:
@@ -250,23 +259,32 @@ def merge_cli_into_config(
         ignore_stale: CLI --ignore-stale flag.
         ignore_missing: CLI --ignore-missing flag.
         strict: CLI --strict flag.
-        format: CLI --format value.
+        output_format: CLI --format value.
 
     Returns:
-        New EnvCheckConfig with CLI overrides applied.
+        New EnvAuditorConfig with CLI overrides applied.
     """
     overrides: dict = {}
     if env_files is not None:
         overrides["env_files"] = env_files
     if exclude_dirs is not None:
         overrides["exclude_dirs"] = (cfg.exclude_dirs or []) + exclude_dirs
-    if ignore_stale is not None and ignore_stale:
+    if ignore_stale:
         overrides["ignore_stale"] = True
-    if ignore_missing is not None and ignore_missing:
+    if ignore_missing:
         overrides["ignore_missing"] = True
-    if strict is not None and strict:
+    if strict:
         overrides["strict"] = True
-    if format is not None:
-        overrides["format"] = format
+    if output_format is not None:
+        # Validate against allowed values — prevents arbitrary string injection
+        if output_format not in ("text", "json"):
+            import sys
+            print(
+                f"env-auditor: warning: invalid output_format '{output_format}', "
+                "using 'text'",
+                file=sys.stderr,
+            )
+            output_format = "text"
+        overrides["output_format"] = output_format
 
     return dataclass_replace(cfg, **overrides)

@@ -9,12 +9,17 @@ from typing import Optional
 # Pre-compiled constants — never constructed from user input.
 _VALID_KEY_RE: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
+# Maximum number of continuation lines to follow in a single key — prevents
+# a crafted .env with thousands of backslash continuations from consuming
+# excessive CPU/memory within the 1 MB file size budget.
+_MAX_CONTINUATION_DEPTH = 64
+
 
 @dataclass
 class ParsedEnvFile:
     """Result of parsing a single .env-style file.
 
-    Values are held only to detect emptiness.  They are never logged,
+    Values are held only to detect emptiness. They are never logged,
     printed, or returned to the caller — only the key names are exposed.
     """
 
@@ -28,7 +33,7 @@ class ParsedEnvFile:
 
     @property
     def empty_keys(self) -> frozenset[str]:
-        """Keys that are present but have an empty value (required, no default)."""
+        """Keys present but with an empty value (required, no default)."""
         return frozenset(k for k, v in self.keys_with_values.items() if v == "")
 
 
@@ -45,7 +50,7 @@ def parse_env_file(path: Path) -> Optional[ParsedEnvFile]:
     - ``# comment`` — skipped
     - Blank lines — skipped
     - ``KEY=value # inline comment`` — comment stripped
-    - ``KEY=first \\`` / continuation lines
+    - ``KEY=first \\`` / continuation lines (capped at 64 levels)
 
     Args:
         path: Absolute path to the env file.
@@ -66,10 +71,16 @@ def parse_env_file(path: Path) -> Optional[ParsedEnvFile]:
     while i < len(lines):
         line = lines[i]
 
-        # Handle backslash line continuation
-        while line.endswith("\\") and i + 1 < len(lines):
+        # Handle backslash line continuation with depth cap
+        continuation_depth = 0
+        while (
+            line.endswith("\\")
+            and i + 1 < len(lines)
+            and continuation_depth < _MAX_CONTINUATION_DEPTH
+        ):
             line = line[:-1] + lines[i + 1]
             i += 1
+            continuation_depth += 1
         i += 1
 
         stripped = line.strip()
@@ -131,10 +142,6 @@ def _strip_inline_comment(value: str) -> str:
     """Remove a trailing inline comment from an unquoted value.
 
     Quoted values are returned unchanged — the caller strips quotes first.
-
-    Examples:
-        ``foo  # comment`` → ``foo``
-        ``"foo # not a comment"`` → ``"foo # not a comment"`` (unchanged)
     """
     if value.startswith('"') or value.startswith("'"):
         return value
