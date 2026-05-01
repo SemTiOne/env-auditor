@@ -278,7 +278,6 @@ def merge_cli_into_config(
     if output_format is not None:
         # Validate against allowed values — prevents arbitrary string injection
         if output_format not in ("text", "json"):
-            import sys
             print(
                 f"env-auditor: warning: invalid output_format '{output_format}', "
                 "using 'text'",
