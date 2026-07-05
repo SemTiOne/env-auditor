@@ -79,8 +79,9 @@ LANGUAGE_PATTERNS: list[LanguagePattern] = [
         name="Docker",
         extensions=[""],  # matched by filename, not extension
         static_patterns=[
-            re.compile(r"^\s*ENV\s+" + ENV_VAR_NAME, re.MULTILINE),
-            re.compile(r"^\s*ARG\s+" + ENV_VAR_NAME, re.MULTILINE),
+            re.compile(r"^\s*ENV\s+" + ENV_VAR_NAME),
+            re.compile(r"(?<=\s)" + ENV_VAR_NAME + r"="),
+            re.compile(r"^\s*ARG\s+" + ENV_VAR_NAME),
         ],
         dynamic_patterns=[],
     ),

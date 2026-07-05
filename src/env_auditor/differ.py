@@ -19,6 +19,9 @@ class DiffResult:
     missing_values: frozenset[str]
     """Keys present in env files with an empty value (likely required, no default)."""
 
+    required_missing: frozenset[str] = frozenset()
+    """Keys listed in required_keys config that are absent from every env file."""
+
 
 def diff_keys(
     code_keys: frozenset[str],

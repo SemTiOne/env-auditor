@@ -28,6 +28,8 @@ def render_text(
     lines.append("")
 
     undoc = sorted(diff.undocumented - ignore_keys)
+    req_missing = sorted(diff.required_missing)
+
     if undoc:
         lines.append(
             f"{c.RED}✗  {len(undoc)} undocumented variable{'s' if len(undoc) != 1 else ''}"
@@ -42,6 +44,15 @@ def render_text(
         lines.append("")
     else:
         lines.append(f"{c.GREEN}✓  No undocumented variables{c.RESET}")
+        lines.append("")
+
+    if req_missing:
+        lines.append(
+            f"{c.RED}✗  {len(req_missing)} required variable{'s' if len(req_missing) != 1 else ''}"
+            f" missing from env file (required_keys){c.RESET}"
+        )
+        for key in req_missing:
+            lines.append(f"   {c.BOLD}{key}{c.RESET}")
         lines.append("")
 
     if not ignore_stale:
@@ -81,7 +92,7 @@ def render_text(
 
     lines.append(sep)
 
-    passed = len(undoc) == 0
+    passed = len(undoc) == 0 and len(req_missing) == 0
     result_label = f"{c.GREEN}PASS{c.RESET}" if passed else f"{c.RED}FAIL{c.RESET}"
     exit_note = "" if passed else "  (exit code 1)"
     lines.append(f"Result: {result_label}{exit_note}")
@@ -100,7 +111,8 @@ def render_json(
     """Render a machine-readable JSON audit report."""
     ignore_keys = ignore_keys or set()
     undoc = sorted(diff.undocumented - ignore_keys)
-    passed = len(undoc) == 0
+    req_missing = sorted(diff.required_missing)
+    passed = len(undoc) == 0 and len(req_missing) == 0
 
     undocumented_list = [
         {
@@ -122,11 +134,13 @@ def render_json(
         "result": "pass" if passed else "fail",
         "summary": {
             "undocumented": len(undoc),
+            "required_missing": len(req_missing),
             "stale": len(diff.stale - ignore_keys) if not ignore_stale else 0,
             "missing_values": len(diff.missing_values - ignore_keys) if not ignore_missing else 0,
             "dynamic_refs": len(scan.dynamic_refs),
         },
         "undocumented": undocumented_list,
+        "required_missing": req_missing,
     }
 
     if not ignore_stale:

@@ -101,6 +101,56 @@ def load_config(scan_root: Path) -> EnvAuditorConfig:
     return EnvAuditorConfig()
 
 
+def load_config_from_file(path: Path) -> EnvAuditorConfig:
+    """Load config from an explicitly specified file path.
+
+    Unlike :func:`load_config`, which auto-discovers config files by name
+    within a directory, this function reads *exactly* the file given —
+    regardless of its name.  Used by the ``--config FILE`` CLI flag.
+
+    Args:
+        path: Resolved absolute path to the config file.
+
+    Returns:
+        Populated EnvAuditorConfig (defaults if the file cannot be parsed).
+    """
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        print(
+            f"env-auditor: warning: cannot stat config file {path}: {exc}",
+            file=sys.stderr,
+        )
+        return EnvAuditorConfig()
+
+    if size > CONFIG_FILE_SIZE_LIMIT:
+        print(
+            f"env-auditor: warning: config file {path} exceeds "
+            f"{CONFIG_FILE_SIZE_LIMIT // 1024} KB size limit, using defaults",
+            file=sys.stderr,
+        )
+        return EnvAuditorConfig()
+
+    try:
+        raw = _parse_toml_file(path, is_pyproject=(path.name == "pyproject.toml"))
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(
+            f"env-auditor: warning: could not parse config {path}: {exc}",
+            file=sys.stderr,
+        )
+        return EnvAuditorConfig()
+
+    if raw is None:
+        print(
+            f"env-auditor: warning: no [tool.env-auditor] section found in "
+            f"{path}, using defaults",
+            file=sys.stderr,
+        )
+        return EnvAuditorConfig()
+
+    return _dict_to_config(raw, path)
+
+
 def _parse_toml_file(path: Path, is_pyproject: bool) -> Optional[dict]:
     """Parse *path* as TOML and return the env-auditor section, or None.
 
@@ -136,22 +186,40 @@ def _parse_toml_file(path: Path, is_pyproject: bool) -> Optional[dict]:
 def _minimal_toml_parse(path: Path) -> dict:
     """Hand-rolled TOML subset parser for .env-auditorrc on Python 3.10.
 
-    Handles: string, bool, list of strings, comments, blank lines.
+    Handles: string, bool, list of strings, comments, blank lines, and
+    nested section headers ([section] / [section.subsection]).  Section
+    headers produce a nested dict so that ``[tool.env-auditor]`` values
+    end up under ``result["tool"]["env-auditor"]``, matching what the real
+    tomllib/tomli parsers return.
+
     Uses pre-compiled regex — never constructs patterns from user input.
 
     Args:
         path: Path to the config file.
 
     Returns:
-        Dict of parsed key/value pairs.
+        Nested dict of parsed key/value pairs.
     """
     result: dict = {}
+    current_node: dict = result   # pointer into result at the current section
     text = path.read_text(encoding="utf-8", errors="replace")
 
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
+
+        if line.startswith("[") and line.endswith("]"):
+            section_str = line[1:-1].strip()
+            parts = [
+                p.strip().strip('"').strip("'")
+                for p in section_str.split(".")
+            ]
+            current_node = result
+            for part in parts:
+                current_node = current_node.setdefault(part, {})
+            continue
+
         if "=" not in line:
             continue
 
@@ -160,18 +228,18 @@ def _minimal_toml_parse(path: Path) -> dict:
         value = value.strip()
 
         if value.lower() == "true":
-            result[key] = True
+            current_node[key] = True
         elif value.lower() == "false":
-            result[key] = False
+            current_node[key] = False
         elif value.startswith("["):
             # Use pre-compiled regex — not constructed from user input
-            result[key] = _LIST_ITEMS_RE.findall(value)
+            current_node[key] = _LIST_ITEMS_RE.findall(value)
         elif value.startswith('"') and value.endswith('"'):
-            result[key] = value[1:-1]
+            current_node[key] = value[1:-1]
         elif value.startswith("'") and value.endswith("'"):
-            result[key] = value[1:-1]
+            current_node[key] = value[1:-1]
         else:
-            result[key] = value
+            current_node[key] = value
 
     return result
 
@@ -217,6 +285,13 @@ def _dict_to_config(raw: dict, source: Path) -> EnvAuditorConfig:
                     setattr(cfg, key, [str(v) for v in value])
                 elif isinstance(value, str):
                     setattr(cfg, key, [value])
+                else:
+                    print(
+                        f"env-auditor: warning: config key '{key}' in {source} "
+                        f"expects a list or string, got {type(value).__name__} "
+                        f"— ignored",
+                        file=sys.stderr,
+                    )
             elif "str" in field_type:
                 str_value = str(value)
                 # Validate output_format against allowed values

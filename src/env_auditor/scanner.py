@@ -133,7 +133,10 @@ def scan_directory(
 
     if extra_exclude:
         for excl in extra_exclude:
-            excluded_names.add(excl.name)
+            # Register the exact resolved path only.  Previously we also called
+            # excluded_names.add(excl.name), which caused every directory with
+            # the same basename to be skipped anywhere in the tree (e.g.
+            # --exclude src/vendor would also exclude root/vendor, lib/vendor).
             excluded_abs.add(excl)
 
     excluded_names.update(_load_gitignore_dirs(root))

@@ -4,16 +4,17 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import NoReturn, Optional
 
 from env_auditor import __version__
 from env_auditor.colors import supports_color
 from env_auditor.config import (
     EnvAuditorConfig,
     load_config,
+    load_config_from_file,
     merge_cli_into_config,
 )
-from env_auditor.differ import diff_keys
+from env_auditor.differ import DiffResult, diff_keys
 from env_auditor.parser import parse_env_files
 from env_auditor.reporter import render_json, render_text
 from env_auditor.scanner import scan_directory
@@ -213,7 +214,7 @@ def _resolve_exclude_dirs(raw_dirs: list[str], scan_root: Path) -> list[Path]:
     return resolved_list
 
 
-def _die(msg: str) -> None:
+def _die(msg: str) -> NoReturn:
     """Print an error to stderr and exit with code 2 (tool error)."""
     print(f"env-auditor: error: {msg}", file=sys.stderr)
     sys.exit(2)
@@ -240,9 +241,7 @@ def _build_config(args: argparse.Namespace, scan_root: Path) -> EnvAuditorConfig
         config_path = Path(args.config).resolve()
         if not config_path.is_file():
             _die(f"Config file not found: {config_path}")
-        # Load config from explicit path by temporarily treating scan_root
-        # as the config file's parent
-        cfg = load_config(config_path.parent)
+        cfg = load_config_from_file(config_path)
     else:
         cfg = load_config(scan_root)
 
@@ -297,6 +296,18 @@ def _run_audit(
     )
 
     ignore_keys: set[str] = set(cfg.ignore_keys) if cfg.ignore_keys else set()
+
+    if cfg.required_keys:
+        effective_required = frozenset(cfg.required_keys) - ignore_keys
+        required_missing = effective_required - parsed_env.all_keys
+        if required_missing:
+            diff = DiffResult(
+                undocumented=diff.undocumented,
+                stale=diff.stale,
+                missing_values=diff.missing_values,
+                required_missing=required_missing,
+            )
+
     fmt = cfg.output_format or "text"
 
     if fmt == "json":
@@ -320,7 +331,7 @@ def _run_audit(
     effective_undoc = diff.undocumented - ignore_keys
     effective_stale = diff.stale - ignore_keys
 
-    if effective_undoc:
+    if effective_undoc or diff.required_missing:
         return 1, output
     if cfg.strict and effective_stale:
         return 1, output
