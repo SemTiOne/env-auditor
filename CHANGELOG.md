@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+> Note: versions 0.1.1–0.1.4 shipped (see pyproject.toml) without corresponding
+> entries here. Those changes (project rename to env-auditor, CRLF injection
+> fix in `sanitize_raw`, `output_format` validation, `.gitattributes`) are not
+> reconstructed retroactively to avoid documenting them inaccurately. This gap
+> is disclosed rather than backfilled with guessed details.
+
+### Fixed
+- `[tool.env-auditor]` in `pyproject.toml` was silently ignored on Python 3.10
+  without `tomli` installed. The fallback TOML parser flattened all
+  `[section]` tables into one shared namespace, so the section could never be
+  found. The fallback parser is now section-aware.
+- `--config FILE` read the *parent directory* of the given file and
+  auto-discovered `.env-auditorrc`/`env-auditor.toml`/`pyproject.toml` there,
+  ignoring the actual file passed. It now reads exactly the file given.
+- `required_keys` was parsed from config but never enforced anywhere, missing
+  required keys now correctly cause exit code 1 and appear in both text and
+  JSON output.
+- Docker `ENV KEY1=a KEY2=b KEY3=c` (recommended single-line multi-assignment
+  style) only detected `KEY1`. Now detects all keys on the line. Scoped
+  strictly to `ENV`/`ARG` lines so it does not also match shell-local
+  `KEY=value` assignments on `RUN`/`LABEL`/`CMD` lines.
+- `--exclude some/path/foo` also silently excluded every other directory
+  named `foo` anywhere in the tree (matched by basename, not full path).
+- List-typed config values given the wrong type (e.g. `ignore_keys = true`)
+  were silently ignored instead of warning.
+- The human-readable and JSON reports could display `Result: PASS` /
+  `"result": "pass"` while the process exited with code 1, whenever the only
+  failure was stale variables under `--strict` — the renderers computed their
+  own incomplete pass/fail flag that never accounted for `--strict`. Pass/fail
+  is now computed once and shared between the exit code and both output
+  formats.
+- `--strict` combined with `--ignore-stale` could exit 1 with no visible
+  explanation at all (the stale section causing the failure was hidden by
+  `--ignore-stale`, and nothing else in the report indicated why). Both
+  output formats now include a note when this happens.
+- `mypy --strict` (as run in CI) now passes with zero errors, down from 14.
+
+### Changed
+- CI's mypy step is no longer `continue-on-error: true` now that it's clean.
+- `load_config` and `load_config_from_file` shared ~40 lines of duplicated
+  size-check/parse/error-handling logic; extracted into `_read_config_raw`.
+
+### Removed
+- `EnvCheckConfig` alias (leftover from the env-check → env-auditor rename).
+  Unused anywhere in the codebase; the rename it bridged is long complete.
+  If you were importing it directly from a pinned old version, use
+  `EnvAuditorConfig` instead.
+
 ## [0.1.0] - 2026-04-21
 
 ### Added

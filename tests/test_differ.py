@@ -100,11 +100,11 @@ def test_ignore_keys_removes_from_undocumented():
     diff = diff_keys(code, documented, frozenset())
     scan = ScanResult()
 
-    text = render_text(diff, scan, use_color=False, ignore_keys={"IGNORED"})
+    text = render_text(diff, scan, passed=True, use_color=False, ignore_keys={"IGNORED"})
     assert "IGNORED" not in text
     assert "No undocumented" in text
 
-    data = json.loads(render_json(diff, scan, ignore_keys={"IGNORED"}))
+    data = json.loads(render_json(diff, scan, passed=True, ignore_keys={"IGNORED"}))
     assert data["result"] == "pass"
     assert all(item["key"] != "IGNORED" for item in data["undocumented"])
 
@@ -119,5 +119,5 @@ def test_ignore_keys_removes_from_stale():
     diff = diff_keys(code, documented, frozenset())
     scan = ScanResult()
 
-    text = render_text(diff, scan, use_color=False, ignore_keys={"STALE_BUT_IGNORED"})
+    text = render_text(diff, scan, passed=True, use_color=False, ignore_keys={"STALE_BUT_IGNORED"})
     assert "STALE_BUT_IGNORED" not in text

@@ -60,4 +60,3 @@ jobs:
 
       - name: Type-check with mypy
         run: mypy src/env_auditor --ignore-missing-imports --strict
-        continue-on-error: true  # advisory for now; flip to false when clean

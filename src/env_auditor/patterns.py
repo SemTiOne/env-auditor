@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import Optional, Sequence
 
 # Env var name: uppercase, starts with letter, underscores/digits allowed
 ENV_VAR_NAME = r"([A-Z][A-Z0-9_]*)"
@@ -20,6 +20,14 @@ class LanguagePattern:
     extensions: Sequence[str]
     static_patterns: Sequence[re.Pattern[str]]
     dynamic_patterns: Sequence[re.Pattern[str]] = field(default_factory=list)
+    line_filter: Optional[re.Pattern[str]] = None
+    """If set, static_patterns/dynamic_patterns are only applied to lines that
+    match this filter first. Used by Docker: the KEY= continuation pattern
+    (which has no anchor of its own) must not fire on RUN/LABEL/CMD lines that
+    happen to contain shell-local KEY=value assignments, e.g.
+    ``RUN DEBIAN_FRONTEND=noninteractive apt-get install -y curl``, that is
+    a build-time shell variable, not a container ENV declaration, and must
+    not be reported as an (un)documented application variable."""
 
 
 LANGUAGE_PATTERNS: list[LanguagePattern] = [
@@ -77,13 +85,27 @@ LANGUAGE_PATTERNS: list[LanguagePattern] = [
     ),
     LanguagePattern(
         name="Docker",
-        extensions=[""],  # matched by filename, not extension
+        extensions=[],  # matched by filename in scanner._get_patterns, not
+        # extension. Do not add "" here: EXTENSION_MAP registers every
+        # entry in `extensions` verbatim, so extensions=[""] previously
+        # made *every* extensionless file (Makefile, LICENSE, README, ...)
+        # fall through to Docker's ENV/ARG patterns via the generic
+        # EXTENSION_MAP[""] lookup, not just genuine Dockerfiles.
         static_patterns=[
+            # ENV KEY=val (new style, single) or ENV KEY value (deprecated style)
             re.compile(r"^\s*ENV\s+" + ENV_VAR_NAME),
+            # ENV KEY1=val1 KEY2=val2 KEY3=val3 — additional vars after the first
+            # (Docker's recommended single-line multi-assignment style, used to
+            # reduce image layer count). Scoped to ENV/ARG lines only via
+            # line_filter below. This pattern has no anchor of its own and
+            # would otherwise match KEY=value tokens on RUN/LABEL/CMD lines too
+            # (e.g. RUN DEBIAN_FRONTEND=noninteractive apt-get install ...).
             re.compile(r"(?<=\s)" + ENV_VAR_NAME + r"="),
+            # ARG KEY or ARG KEY=default
             re.compile(r"^\s*ARG\s+" + ENV_VAR_NAME),
         ],
         dynamic_patterns=[],
+        line_filter=re.compile(r"^\s*(?:ENV|ARG)\s"),
     ),
     LanguagePattern(
         name="Ruby",
