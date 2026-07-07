@@ -145,6 +145,60 @@ def test_dockerfile_arg(tmp_path):
     assert "BUILD_SECRET" in result.all_keys
 
 
+def test_dockerfile_env_multiple_vars_one_line(tmp_path):
+    """Docker's recommended style: ENV KEY1=a KEY2=b KEY3=c on a single line
+    (reduces image layers). All three keys must be captured, not just the
+    first one immediately after the ENV keyword."""
+    make_file(
+        tmp_path / "Dockerfile",
+        "ENV KEY1=val1 KEY2=val2 KEY3=val3\n",
+    )
+    result = scan_directory(tmp_path)
+    assert {"KEY1", "KEY2", "KEY3"} <= result.all_keys
+
+
+def test_dockerfile_run_line_not_falsely_flagged(tmp_path):
+    """RUN lines commonly set shell-local variables scoped to that single
+    command (e.g. DEBIAN_FRONTEND for apt-get). These are not container ENV
+    declarations and must not be reported as application env vars."""
+    make_file(
+        tmp_path / "Dockerfile",
+        "RUN DEBIAN_FRONTEND=noninteractive apt-get install -y curl\n"
+        "RUN NODE_ENV=production npm run build\n",
+    )
+    result = scan_directory(tmp_path)
+    assert "DEBIAN_FRONTEND" not in result.all_keys
+    assert "NODE_ENV" not in result.all_keys
+
+
+def test_dockerfile_label_line_not_falsely_flagged(tmp_path):
+    """LABEL sets image metadata, not environment variables."""
+    make_file(
+        tmp_path / "Dockerfile",
+        "LABEL VERSION=1.0.3 MAINTAINER=me\n",
+    )
+    result = scan_directory(tmp_path)
+    assert "VERSION" not in result.all_keys
+    assert "MAINTAINER" not in result.all_keys
+
+
+def test_extensionless_non_dockerfile_not_scanned_with_docker_patterns(tmp_path):
+    """Regression test: Docker's LanguagePattern previously registered
+    extensions=[""] into EXTENSION_MAP, which meant every extensionless
+    file (Makefile, LICENSE, README, ...), not just genuine Dockerfiles,
+    fell through to Docker's ENV/ARG detection via the generic extension
+    lookup. A Makefile line that happens to start with ENV/ARG followed by
+    an uppercase identifier must not be reported as an application env var."""
+    make_file(
+        tmp_path / "Makefile",
+        "ENV DEPLOY_TARGET=production\n"
+        "ARG RELEASE_VERSION=1.0\n",
+    )
+    result = scan_directory(tmp_path)
+    assert "DEPLOY_TARGET" not in result.all_keys
+    assert "RELEASE_VERSION" not in result.all_keys
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Exclusion behavior
 # ──────────────────────────────────────────────────────────────────────────────
@@ -170,6 +224,21 @@ def test_extra_exclude_dir(tmp_path):
     result = scan_directory(tmp_path, extra_exclude=extra)
     assert "APP_KEY" in result.all_keys
     assert "VENDOR_KEY" not in result.all_keys
+
+
+def test_extra_exclude_matches_path_not_basename(tmp_path):
+    """Excluding one directory must not exclude every other directory that
+    happens to share the same basename elsewhere in the tree. Regression
+    test: --exclude src/vendor previously also excluded root-level vendor/
+    because exclusion matched on directory name alone, not full path."""
+    make_file(tmp_path / "vendor" / "lib.py", 'os.environ["ROOT_VENDOR_KEY"]\n')
+    make_file(tmp_path / "src" / "vendor" / "other.py", 'os.environ["SRC_VENDOR_KEY"]\n')
+    extra = [tmp_path / "src" / "vendor"]
+    result = scan_directory(tmp_path, extra_exclude=extra)
+    assert "ROOT_VENDOR_KEY" in result.all_keys, (
+        "root-level vendor/ was wrongly excluded due to basename-only matching"
+    )
+    assert "SRC_VENDOR_KEY" not in result.all_keys
 
 
 # ──────────────────────────────────────────────────────────────────────────────

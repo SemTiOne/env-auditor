@@ -11,6 +11,7 @@ from env_auditor.patterns import (
     DOCKERFILE_PATTERN,
     EXTENSION_MAP,
     SHELL_NOISE,
+    LanguagePattern,
 )
 
 # Skip files larger than this (bytes) to avoid memory issues
@@ -217,6 +218,14 @@ def _scan_file(filepath: Path, root: Path, result: ScanResult) -> None:
             continue
 
         for lang_pattern in patterns:
+            # If this LanguagePattern scopes itself to certain line shapes
+            # (e.g. Docker's ENV/ARG-only patterns), skip lines that don't
+            # match, prevents e.g. Docker's KEY= continuation pattern from
+            # firing on RUN/LABEL/CMD lines that contain shell-local
+            # KEY=value assignments unrelated to container env vars.
+            if lang_pattern.line_filter and not lang_pattern.line_filter.match(line):
+                continue
+
             # Static patterns — extract named env var keys
             for regex in lang_pattern.static_patterns:
                 for match in regex.finditer(line):
@@ -249,7 +258,7 @@ def _rel(filepath: Path, root: Path) -> str:
         return str(filepath)
 
 
-def _get_patterns(filepath: Path):
+def _get_patterns(filepath: Path) -> list[LanguagePattern]:
     """Return applicable LanguagePattern objects for *filepath*, or empty list."""
     name = filepath.name
     if name in ("Dockerfile", "dockerfile") or name.startswith("Dockerfile."):

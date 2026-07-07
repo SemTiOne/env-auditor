@@ -352,7 +352,12 @@ def test_multiple_env_files(tmp_path):
 # Config file integration
 # ──────────────────────────────────────────────────────────────────────────────
 
-def test_config_file_strict_via_envcheckrc(tmp_path):
+def test_config_file_strict_via_envcheckrc(tmp_path, capsys):
+    """Also verifies the printed text agrees with the exit code, regression
+    test for a bug found during review where render_text computed its own
+    incomplete 'passed' flag (only checking undocumented/required_missing,
+    never --strict + stale), so a stale-only failure under --strict printed
+    'Result: PASS' while the process exited 1."""
     make_project(
         tmp_path,
         code='import os\nurl = os.environ["USED_KEY"]\n',
@@ -362,6 +367,62 @@ def test_config_file_strict_via_envcheckrc(tmp_path):
     with pytest.raises(SystemExit) as exc:
         main([str(tmp_path), "--env", str(tmp_path / ".env.example")])
     assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Result: FAIL" in out
+    assert "Result: PASS" not in out
+
+
+def test_strict_stale_only_failure_json_result_matches_exit_code(tmp_path, capsys):
+    """Same regression as above, JSON output. A scripted CI consumer trusts
+    payload["result"], it must never say "pass" while the process exits 1."""
+    make_project(
+        tmp_path,
+        code='import os\nurl = os.environ["USED_KEY"]\n',
+        env_content="USED_KEY=val\nSTALE_KEY=old\n",
+    )
+    (tmp_path / ".env-auditorrc").write_text(
+        'strict = true\nformat = "json"\n', encoding="utf-8"
+    )
+    with pytest.raises(SystemExit) as exc:
+        main([str(tmp_path), "--env", str(tmp_path / ".env.example")])
+    assert exc.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["result"] == "fail"
+
+
+def test_strict_with_ignore_stale_explains_hidden_failure(tmp_path, capsys):
+    """Regression test: --strict + --ignore-stale together previously exited
+    1 (correctly) but the stale section was hidden from the report, leaving
+    a "Result: FAIL" with zero visible explanation. A note must now explain
+    why, in both text and JSON output."""
+    make_project(
+        tmp_path,
+        code='import os\nurl = os.environ["USED_KEY"]\n',
+        env_content="USED_KEY=val\nSTALE_KEY=old\n",
+    )
+    with pytest.raises(SystemExit) as exc:
+        main([
+            str(tmp_path),
+            "--env", str(tmp_path / ".env.example"),
+            "--strict", "--ignore-stale",
+        ])
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "STALE_KEY" not in out  # still suppressed, as --ignore-stale promises
+    assert "Result: FAIL" in out
+    assert "--ignore-stale" in out  # but the reason is no longer silent
+
+    with pytest.raises(SystemExit) as exc:
+        main([
+            str(tmp_path),
+            "--env", str(tmp_path / ".env.example"),
+            "--strict", "--ignore-stale", "--format", "json",
+        ])
+    assert exc.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["result"] == "fail"
+    assert "stale" not in payload
+    assert "note" in payload
 
 
 def test_config_file_ignore_keys(tmp_path, capsys):
@@ -380,20 +441,25 @@ def test_config_file_ignore_keys(tmp_path, capsys):
 
 
 def test_explicit_config_flag(tmp_path):
+    """Regression test for Bug 2: --config myconfig.toml must actually be
+    read. Uses strict=true + a stale var so the assertion can only pass if
+    the config file's content genuinely took effect. A config value equal
+    to the default (as the previous version of this test used) would pass
+    whether or not --config was honored at all."""
     make_project(
         tmp_path,
-        code='import os\nurl = os.environ["CLEAN_KEY"]\n',
-        env_content="CLEAN_KEY=value\n",
+        code='import os\nurl = os.environ["USED_KEY"]\n',
+        env_content="USED_KEY=val\nSTALE_KEY=old\n",
     )
     cfg_path = tmp_path / "myconfig.toml"
-    cfg_path.write_text("strict = false\n", encoding="utf-8")
+    cfg_path.write_text("strict = true\n", encoding="utf-8")
     with pytest.raises(SystemExit) as exc:
         main([
             str(tmp_path),
             "--env", str(tmp_path / ".env.example"),
             "--config", str(cfg_path),
         ])
-    assert exc.value.code == 0
+    assert exc.value.code == 1
 
 
 def test_explicit_config_flag_missing_file(tmp_path):
@@ -404,3 +470,72 @@ def test_explicit_config_flag_missing_file(tmp_path):
             "--config", str(tmp_path / "nonexistent.toml"),
         ])
     assert exc.value.code == 2
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# required_keys enforcement
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_required_keys_missing_fails(tmp_path):
+    """Regression test for Bug 3: required_keys was parsed from config but
+    never enforced anywhere. A required key absent from every env file must
+    now cause exit code 1, even with no code references and no other
+    findings at all."""
+    make_project(
+        tmp_path,
+        code="import os\n",
+        env_content="OTHER_KEY=val\n",
+    )
+    (tmp_path / ".env-auditorrc").write_text(
+        'required_keys = ["DATABASE_URL", "SECRET_KEY"]\n', encoding="utf-8"
+    )
+    with pytest.raises(SystemExit) as exc:
+        main([str(tmp_path), "--env", str(tmp_path / ".env.example")])
+    assert exc.value.code == 1
+
+
+def test_required_keys_present_passes(tmp_path):
+    make_project(
+        tmp_path,
+        code="import os\n",
+        env_content="DATABASE_URL=postgres://localhost/db\n",
+    )
+    (tmp_path / ".env-auditorrc").write_text(
+        'required_keys = ["DATABASE_URL"]\n', encoding="utf-8"
+    )
+    with pytest.raises(SystemExit) as exc:
+        main([str(tmp_path), "--env", str(tmp_path / ".env.example")])
+    assert exc.value.code == 0
+
+
+def test_required_keys_respects_ignore_keys(tmp_path):
+    """A required key that's also in ignore_keys must not block a pass.
+    Ignore_keys is an explicit, deliberate opt-out."""
+    make_project(
+        tmp_path,
+        code="import os\n",
+        env_content="",
+    )
+    (tmp_path / ".env-auditorrc").write_text(
+        'required_keys = ["OPTIONAL_IN_CI"]\n'
+        'ignore_keys = ["OPTIONAL_IN_CI"]\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit) as exc:
+        main([str(tmp_path), "--env", str(tmp_path / ".env.example")])
+    assert exc.value.code == 0
+
+
+def test_required_keys_shown_in_json_output(tmp_path, capsys):
+    make_project(tmp_path, code="import os\n", env_content="")
+    (tmp_path / ".env-auditorrc").write_text(
+        'required_keys = ["API_KEY"]\nformat = "json"\n', encoding="utf-8"
+    )
+    with pytest.raises(SystemExit) as exc:
+        main([str(tmp_path), "--env", str(tmp_path / ".env.example")])
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    payload = json.loads(out)
+    assert payload["result"] == "fail"
+    assert "API_KEY" in payload["required_missing"]
+    assert payload["summary"]["required_missing"] == 1

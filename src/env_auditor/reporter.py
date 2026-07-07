@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Optional
+from typing import Any, Optional
 
 from env_auditor.colors import get_colors
 from env_auditor.differ import DiffResult
@@ -12,12 +12,24 @@ def render_text(
     diff: DiffResult,
     scan: ScanResult,
     *,
+    passed: bool,
     use_color: bool = True,
     ignore_stale: bool = False,
     ignore_missing: bool = False,
     ignore_keys: Optional[set[str]] = None,
 ) -> str:
-    """Render a human-readable audit report."""
+    """Render a human-readable audit report.
+
+    Args:
+        passed: The final pass/fail verdict, computed by the caller (which
+            has access to --strict and all effective-set logic). This is
+            passed in rather than recomputed here so the displayed
+            "Result: PASS/FAIL" can never disagree with the process's
+            actual exit code. Previously this function computed its own
+            (incomplete) notion of "passed" that ignored --strict entirely,
+            so a stale-only failure under --strict displayed "Result: PASS"
+            while the process exited 1.
+    """
     c = get_colors(use_color)
     ignore_keys = ignore_keys or set()
     lines: list[str] = []
@@ -92,10 +104,18 @@ def render_text(
 
     lines.append(sep)
 
-    passed = len(undoc) == 0 and len(req_missing) == 0
     result_label = f"{c.GREEN}PASS{c.RESET}" if passed else f"{c.RED}FAIL{c.RESET}"
     exit_note = "" if passed else "  (exit code 1)"
     lines.append(f"Result: {result_label}{exit_note}")
+
+    if not passed and not undoc and not req_missing and ignore_stale:
+        # The only other failure condition (--strict + stale vars) is true,
+        # but --ignore-stale hid the stale section above. Without this note
+        # the report would show FAIL with no visible reason at all.
+        lines.append(
+            f"{c.DIM}(failed due to stale variables under --strict;"
+            f" rerun without --ignore-stale to see them){c.RESET}"
+        )
 
     return "\n".join(lines)
 
@@ -104,15 +124,20 @@ def render_json(
     diff: DiffResult,
     scan: ScanResult,
     *,
+    passed: bool,
     ignore_stale: bool = False,
     ignore_missing: bool = False,
     ignore_keys: Optional[set[str]] = None,
 ) -> str:
-    """Render a machine-readable JSON audit report."""
+    """Render a machine-readable JSON audit report.
+
+    Args:
+        passed: See render_text, the caller-computed pass/fail verdict,
+            kept as the single source of truth shared with the exit code.
+    """
     ignore_keys = ignore_keys or set()
     undoc = sorted(diff.undocumented - ignore_keys)
     req_missing = sorted(diff.required_missing)
-    passed = len(undoc) == 0 and len(req_missing) == 0
 
     undocumented_list = [
         {
@@ -130,7 +155,7 @@ def render_json(
         for r in scan.dynamic_refs
     ]
 
-    payload: dict = {
+    payload: dict[str, Any] = {
         "result": "pass" if passed else "fail",
         "summary": {
             "undocumented": len(undoc),
@@ -147,6 +172,12 @@ def render_json(
         payload["stale"] = sorted(diff.stale - ignore_keys)
     if not ignore_missing:
         payload["missing_values"] = sorted(diff.missing_values - ignore_keys)
+
+    if not passed and not undoc and not req_missing and ignore_stale:
+        payload["note"] = (
+            "Failed due to stale variables under --strict; rerun without "
+            "--ignore-stale to see them (suppressed from this output)."
+        )
 
     payload["dynamic_refs"] = dynamic_list
 

@@ -4,7 +4,7 @@ import re
 import sys
 from dataclasses import dataclass, field, replace as dataclass_replace
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, cast
 
 # Config file is searched in this order within the scan root.
 CONFIG_FILENAMES = (".env-auditorrc", "env-auditor.toml", "pyproject.toml")
@@ -48,10 +48,6 @@ class EnvAuditorConfig:
     """Keys that MUST be documented; always flagged if missing."""
 
 
-# Keep old name as alias so existing imports don't break during transition
-EnvCheckConfig = EnvAuditorConfig
-
-
 def load_config(scan_root: Path) -> EnvAuditorConfig:
     """Search for and parse a config file within *scan_root*.
 
@@ -70,30 +66,15 @@ def load_config(scan_root: Path) -> EnvAuditorConfig:
         if not candidate.is_file():
             continue
 
-        # Guard: size limit — prevents memory exhaustion
-        try:
-            size = candidate.stat().st_size
-        except OSError:
-            continue
-
-        if size > CONFIG_FILE_SIZE_LIMIT:
-            print(
-                f"env-auditor: warning: config file {candidate} exceeds "
-                f"{CONFIG_FILE_SIZE_LIMIT // 1024} KB size limit, skipping",
-                file=sys.stderr,
-            )
-            continue
-
-        try:
-            raw = _parse_toml_file(candidate, filename == "pyproject.toml")
-        except (OSError, ValueError, KeyError, TypeError) as exc:
-            print(
-                f"env-auditor: warning: could not parse config {candidate}: {exc}",
-                file=sys.stderr,
-            )
+        raw, hard_error = _read_config_raw(candidate)
+        if hard_error:
+            # A candidate that exists but is broken (unreadable, unparseable)
+            # stops the search here rather than silently falling through to
+            # a different config file the user may not know exists.
             return EnvAuditorConfig()
-
         if raw is None:
+            # File parsed fine but has no env-auditor section for us (e.g. a
+            # pyproject.toml without [tool.env-auditor]), keep looking.
             continue
 
         return _dict_to_config(raw, candidate)
@@ -105,7 +86,7 @@ def load_config_from_file(path: Path) -> EnvAuditorConfig:
     """Load config from an explicitly specified file path.
 
     Unlike :func:`load_config`, which auto-discovers config files by name
-    within a directory, this function reads *exactly* the file given —
+    within a directory, this function reads exactly the file given,
     regardless of its name.  Used by the ``--config FILE`` CLI flag.
 
     Args:
@@ -114,32 +95,7 @@ def load_config_from_file(path: Path) -> EnvAuditorConfig:
     Returns:
         Populated EnvAuditorConfig (defaults if the file cannot be parsed).
     """
-    try:
-        size = path.stat().st_size
-    except OSError as exc:
-        print(
-            f"env-auditor: warning: cannot stat config file {path}: {exc}",
-            file=sys.stderr,
-        )
-        return EnvAuditorConfig()
-
-    if size > CONFIG_FILE_SIZE_LIMIT:
-        print(
-            f"env-auditor: warning: config file {path} exceeds "
-            f"{CONFIG_FILE_SIZE_LIMIT // 1024} KB size limit, using defaults",
-            file=sys.stderr,
-        )
-        return EnvAuditorConfig()
-
-    try:
-        raw = _parse_toml_file(path, is_pyproject=(path.name == "pyproject.toml"))
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        print(
-            f"env-auditor: warning: could not parse config {path}: {exc}",
-            file=sys.stderr,
-        )
-        return EnvAuditorConfig()
-
+    raw, _hard_error = _read_config_raw(path)
     if raw is None:
         print(
             f"env-auditor: warning: no [tool.env-auditor] section found in "
@@ -151,7 +107,55 @@ def load_config_from_file(path: Path) -> EnvAuditorConfig:
     return _dict_to_config(raw, path)
 
 
-def _parse_toml_file(path: Path, is_pyproject: bool) -> Optional[dict]:
+def _read_config_raw(path: Path) -> tuple[Optional[dict[str, Any]], bool]:
+    """Validate size, parse path as TOML, and return its env-auditor section.
+
+    Shared by :func:`load_config` (auto-discovery) and
+    :func:`load_config_from_file` (explicit ``--config``) to avoid duplicating
+    the size-limit check and parse-error handling in both places.
+
+    Args:
+        path: Path to a config file that is known to exist.
+
+    Returns:
+        ``(raw, hard_error)`` where:
+        - ``raw`` is the parsed env-auditor section dict, or ``None`` if the
+          file parsed cleanly but has no such section (e.g. pyproject.toml
+          without ``[tool.env-auditor]``).
+        - ``hard_error`` is ``True`` if the file could not be stat'd, exceeded
+          the size limit, or failed to parse. Callers should not treat a
+          hard error the same as "no section found".
+    """
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        print(
+            f"env-auditor: warning: cannot stat config file {path}: {exc}",
+            file=sys.stderr,
+        )
+        return None, True
+
+    if size > CONFIG_FILE_SIZE_LIMIT:
+        print(
+            f"env-auditor: warning: config file {path} exceeds "
+            f"{CONFIG_FILE_SIZE_LIMIT // 1024} KB size limit, using defaults",
+            file=sys.stderr,
+        )
+        return None, True
+
+    try:
+        raw = _parse_toml_file(path, is_pyproject=(path.name == "pyproject.toml"))
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(
+            f"env-auditor: warning: could not parse config {path}: {exc}",
+            file=sys.stderr,
+        )
+        return None, True
+
+    return raw, False
+
+
+def _parse_toml_file(path: Path, is_pyproject: bool) -> Optional[dict[str, Any]]:
     """Parse *path* as TOML and return the env-auditor section, or None.
 
     Uses stdlib ``tomllib`` (Python 3.11+) with ``tomli`` fallback,
@@ -179,11 +183,11 @@ def _parse_toml_file(path: Path, is_pyproject: bool) -> Optional[dict]:
 
     if is_pyproject:
         tool = data.get("tool", {})
-        return tool.get("env-auditor")  # None if not present
+        return cast(Optional[dict[str, Any]], tool.get("env-auditor"))  # None if not present
     return data or None
 
 
-def _minimal_toml_parse(path: Path) -> dict:
+def _minimal_toml_parse(path: Path) -> dict[str, Any]:
     """Hand-rolled TOML subset parser for .env-auditorrc on Python 3.10.
 
     Handles: string, bool, list of strings, comments, blank lines, and
@@ -200,8 +204,8 @@ def _minimal_toml_parse(path: Path) -> dict:
     Returns:
         Nested dict of parsed key/value pairs.
     """
-    result: dict = {}
-    current_node: dict = result   # pointer into result at the current section
+    result: dict[str, Any] = {}
+    current_node: dict[str, Any] = result   # pointer into result at the current section
     text = path.read_text(encoding="utf-8", errors="replace")
 
     for raw_line in text.splitlines():
@@ -244,7 +248,7 @@ def _minimal_toml_parse(path: Path) -> dict:
     return result
 
 
-def _dict_to_config(raw: dict, source: Path) -> EnvAuditorConfig:
+def _dict_to_config(raw: dict[str, Any], source: Path) -> EnvAuditorConfig:
     """Convert a raw dict from TOML into an EnvAuditorConfig.
 
     Unknown keys are warned about but ignored. Type coercion is strict —
@@ -262,7 +266,7 @@ def _dict_to_config(raw: dict, source: Path) -> EnvAuditorConfig:
         raw = dict(raw)
         raw["output_format"] = raw.pop("format")
 
-    known_keys = set(EnvAuditorConfig.__dataclass_fields__.keys())  # type: ignore[attr-defined]
+    known_keys = set(EnvAuditorConfig.__dataclass_fields__.keys())
     cfg = EnvAuditorConfig()
 
     for key, value in raw.items():
@@ -274,7 +278,7 @@ def _dict_to_config(raw: dict, source: Path) -> EnvAuditorConfig:
             continue
 
         field_type = str(
-            EnvAuditorConfig.__dataclass_fields__[key].type  # type: ignore[attr-defined]
+            EnvAuditorConfig.__dataclass_fields__[key].type
         )
 
         try:
@@ -339,7 +343,7 @@ def merge_cli_into_config(
     Returns:
         New EnvAuditorConfig with CLI overrides applied.
     """
-    overrides: dict = {}
+    overrides: dict[str, Any] = {}
     if env_files is not None:
         overrides["env_files"] = env_files
     if exclude_dirs is not None:

@@ -6,10 +6,13 @@ from pathlib import Path
 import pytest
 
 from env_auditor.config import (
+    CONFIG_FILE_SIZE_LIMIT,
     EnvAuditorConfig,
     _dict_to_config,
     _minimal_toml_parse,
+    _parse_toml_file,
     load_config,
+    load_config_from_file,
     merge_cli_into_config,
 )
 
@@ -206,6 +209,63 @@ def test_minimal_toml_parse_ignores_blank_lines(tmp_path):
     assert result["strict"] is True
 
 
+def test_minimal_toml_parse_nested_section(tmp_path):
+    """Regression test for Bug 1: on Python 3.10 without tomli installed,
+    _minimal_toml_parse must build a nested dict from [section.subsection]
+    headers so [tool.env-auditor] can be found by _parse_toml_file, instead
+    of flattening every section into one shared top-level namespace (which
+    made the section undiscoverable and caused load_config to silently
+    fall back to defaults)."""
+    p = write_rc(
+        tmp_path,
+        """
+        [build-system]
+        requires = ["hatchling"]
+
+        [tool.env-auditor]
+        strict = true
+        format = "json"
+        ignore_keys = ["CI", "HOME"]
+        """,
+        name="pyproject.toml",
+    )
+    result = _minimal_toml_parse(p)
+    assert "tool" in result, "section header did not create a nested dict"
+    assert result["tool"]["env-auditor"]["strict"] is True
+    assert result["tool"]["env-auditor"]["format"] == "json"
+    assert result["tool"]["env-auditor"]["ignore_keys"] == ["CI", "HOME"]
+    # build-system's keys must not leak into the top-level namespace
+    assert "requires" not in result
+
+
+def test_parse_toml_file_pyproject_via_fallback_parser(tmp_path, monkeypatch):
+    """Integration regression test for Bug 1: force both tomllib and tomli
+    imports to fail (simulating Python 3.10 without tomli installed) and
+    confirm _parse_toml_file still finds [tool.env-auditor] through the
+    fallback parser, rather than returning None and silently defaulting."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def blocking_import(name, *args, **kwargs):
+        if name in ("tomllib", "tomli"):
+            raise ImportError(f"simulated: {name} unavailable")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", blocking_import)
+
+    p = tmp_path / "pyproject.toml"
+    p.write_text(
+        '[build-system]\nrequires = ["hatchling"]\n\n'
+        '[tool.env-auditor]\nstrict = true\nformat = "json"\n',
+        encoding="utf-8",
+    )
+    result = _parse_toml_file(p, is_pyproject=True)
+    assert result is not None
+    assert result["strict"] is True
+    assert result["format"] == "json"
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # _dict_to_config
 # ──────────────────────────────────────────────────────────────────────────────
@@ -222,6 +282,68 @@ def test_dict_to_config_unknown_key_warns(tmp_path, capsys):
     _dict_to_config({"nonexistent_key": "value"}, p)
     err = capsys.readouterr().err
     assert "unknown config key" in err
+
+
+def test_dict_to_config_wrong_type_list_value_warns(tmp_path, capsys):
+    """Regression test for Bug 5: a list-typed config key given a value that
+    is neither a list nor a string (e.g. a bare bool) must warn on stderr
+    and leave the default in place, instead of being silently ignored."""
+    p = tmp_path / ".env-auditorrc"
+    cfg = _dict_to_config({"ignore_keys": True}, p)
+    err = capsys.readouterr().err
+    assert "expects a list" in err
+    assert cfg.ignore_keys == []  # default untouched
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# load_config_from_file (explicit --config FILE)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_load_config_from_file_reads_nonstandard_filename(tmp_path):
+    """Regression test for Bug 2: --config myconfig.toml (a name not in
+    CONFIG_FILENAMES) must actually be parsed, not silently ignored in favor
+    of auto-discovering .env-auditorrc/env-auditor.toml/pyproject.toml in
+    the same directory.
+
+    Note on TOML dispatch: whether a file is parsed with [tool.env-auditor]
+    section lookup or as flat key=value pairs is decided by filename, same
+    as auto-discovery. Only a file literally named pyproject.toml gets
+    section lookup; any other name (like this one) is flat-style, matching
+    .env-auditorrc conventions."""
+    p = tmp_path / "myconfig.toml"
+    p.write_text("strict = true\n", encoding="utf-8")
+    cfg = load_config_from_file(p)
+    assert cfg.strict is True
+
+
+def test_load_config_from_file_no_section_warns_and_defaults(tmp_path, capsys):
+    """A file explicitly named pyproject.toml but lacking [tool.env-auditor]
+    must warn and fall back to defaults, same as auto-discovery would."""
+    p = tmp_path / "pyproject.toml"
+    p.write_text("[build-system]\nrequires = [\"hatchling\"]\n", encoding="utf-8")
+    cfg = load_config_from_file(p)
+    err = capsys.readouterr().err
+    assert "no [tool.env-auditor] section" in err
+    assert cfg.strict is False  # default
+
+
+def test_load_config_from_file_oversized_warns_and_defaults(tmp_path, capsys):
+    p = tmp_path / "myconfig.toml"
+    p.write_text("strict = true\n" + "# padding\n" * (CONFIG_FILE_SIZE_LIMIT // 10), encoding="utf-8")
+    cfg = load_config_from_file(p)
+    err = capsys.readouterr().err
+    assert "size limit" in err
+    assert cfg.strict is False  # oversized file rejected, default used
+
+
+def test_load_config_from_file_pyproject_named_file(tmp_path):
+    """An explicit --config path can itself be named pyproject.toml, in
+    which case it must still be read as a [tool.env-auditor] section, not
+    as a flat .env-auditorrc-style file."""
+    p = tmp_path / "pyproject.toml"
+    p.write_text('[tool.env-auditor]\nstrict = true\n', encoding="utf-8")
+    cfg = load_config_from_file(p)
+    assert cfg.strict is True
 
 
 # ──────────────────────────────────────────────────────────────────────────────

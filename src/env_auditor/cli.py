@@ -308,12 +308,28 @@ def _run_audit(
                 required_missing=required_missing,
             )
 
+    # Single source of truth for pass/fail, computed once and shared by both
+    # the exit code and the rendered output, previously the renderers
+    # recomputed their own (incomplete) "passed" flag that ignored --strict
+    # entirely, so a stale-only failure under --strict would print
+    # "Result: PASS" while the process still exited 1.
+    effective_undoc = diff.undocumented - ignore_keys
+    effective_stale = diff.stale - ignore_keys
+    if effective_undoc or diff.required_missing:
+        exit_code = 1
+    elif cfg.strict and effective_stale:
+        exit_code = 1
+    else:
+        exit_code = 0
+    passed = exit_code == 0
+
     fmt = cfg.output_format or "text"
 
     if fmt == "json":
         output = render_json(
             diff,
             scan_result,
+            passed=passed,
             ignore_stale=cfg.ignore_stale,
             ignore_missing=cfg.ignore_missing,
             ignore_keys=ignore_keys,
@@ -322,20 +338,14 @@ def _run_audit(
         output = render_text(
             diff,
             scan_result,
+            passed=passed,
             use_color=use_color,
             ignore_stale=cfg.ignore_stale,
             ignore_missing=cfg.ignore_missing,
             ignore_keys=ignore_keys,
         )
 
-    effective_undoc = diff.undocumented - ignore_keys
-    effective_stale = diff.stale - ignore_keys
-
-    if effective_undoc or diff.required_missing:
-        return 1, output
-    if cfg.strict and effective_stale:
-        return 1, output
-    return 0, output
+    return exit_code, output
 
 
 # ──────────────────────────────────────────────────────────────────────────────
