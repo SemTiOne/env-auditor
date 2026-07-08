@@ -360,6 +360,22 @@ def main(argv: Optional[list[str]] = None) -> None:
         1 — undocumented variables found (or stale with --strict)
         2 — tool error (bad arguments, unreadable config, etc.)
     """
+    # Force UTF-8 for stdout/stderr regardless of platform locale. Without
+    # this, Windows defaults non-console output (piped, redirected to a
+    # file, or captured by a CI runner) to the system's legacy codepage,
+    # commonly cp1252, which cannot encode the ✓/✗/⚠/─ characters used
+    # throughout the report. The tool would crash with UnicodeEncodeError
+    # on `print(output)` below any time its output isn't going straight to
+    # a real Windows Terminal/console. This affects real Windows users, not
+    # just CI: `env-auditor . > report.txt` or `env-auditor . | tee log`
+    # would crash the same way.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8")
+            except (AttributeError, ValueError, OSError):
+                pass  # best-effort, never let this crash the tool itself
+
     parser = _build_parser()
     args = parser.parse_args(argv)
 
