@@ -43,6 +43,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--ignore-stale`, and nothing else in the report indicated why). Both
   output formats now include a note when this happens.
 - `mypy --strict` (as run in CI) now passes with zero errors, down from 14.
+- The CLI crashed with `UnicodeEncodeError` on `print(output)` any time stdout
+  wasn't a UTF-8-native console — piped output, output redirected to a file,
+  or captured by a CI runner, which is the default for non-console output on
+  Windows (commonly codepage `cp1252`, which cannot encode the `✓ ✗ ⚠ ─`
+  characters used throughout the report). `main()` now forces UTF-8 on
+  `sys.stdout`/`sys.stderr` before printing anything.
+- Any extensionless file (`Makefile`, `LICENSE`, bare `README`, etc.) was
+  incorrectly scanned with Docker's `ENV`/`ARG` patterns, because Docker's
+  `LanguagePattern` registered itself under `EXTENSION_MAP[""]`. Detection is
+  now filename-only (`Dockerfile`, `Dockerfile.*`), matching how it's already
+  dispatched in `scanner._get_patterns`.
+- `[tool.env-auditor]` (or the `[tool]` table above it) being a non-table
+  TOML value — valid TOML, e.g. `[tool]\nenv-auditor = "oops"` — crashed with
+  an uncaught `AttributeError` instead of falling back to defaults with a
+  warning like every other malformed-config path already does.
 
 ### Changed
 - CI's mypy step is no longer `continue-on-error: true` now that it's clean.

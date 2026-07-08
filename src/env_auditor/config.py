@@ -4,7 +4,7 @@ import re
 import sys
 from dataclasses import dataclass, field, replace as dataclass_replace
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 # Config file is searched in this order within the scan root.
 CONFIG_FILENAMES = (".env-auditorrc", "env-auditor.toml", "pyproject.toml")
@@ -183,7 +183,20 @@ def _parse_toml_file(path: Path, is_pyproject: bool) -> Optional[dict[str, Any]]
 
     if is_pyproject:
         tool = data.get("tool", {})
-        return cast(Optional[dict[str, Any]], tool.get("env-auditor"))  # None if not present
+        if not isinstance(tool, dict):
+            # A pyproject.toml with a top-level `tool = "..."` scalar instead
+            # of a table is unusual but valid TOML, treat it the same as
+            # "no [tool.env-auditor] section" rather than crashing below.
+            return None
+        section = tool.get("env-auditor")
+        if section is not None and not isinstance(section, dict):
+            print(
+                f"env-auditor: warning: [tool.env-auditor] in {path} is not "
+                f"a table (got {type(section).__name__}), using defaults",
+                file=sys.stderr,
+            )
+            return None
+        return section
     return data or None
 
 
@@ -307,6 +320,17 @@ def _dict_to_config(raw: dict[str, Any], source: Path) -> EnvAuditorConfig:
                     )
                     str_value = "text"
                 setattr(cfg, key, str_value)
+            else:  # pragma: no cover
+                # Defensive: every current EnvAuditorConfig field is bool,
+                # list[str], or str, so this branch is unreachable today.
+                # It exists so that adding a field of a new type in the
+                # future fails loudly here instead of silently dropping
+                # the user's config value with no trace.
+                print(
+                    f"env-auditor: warning: config key '{key}' in {source} "
+                    f"has unhandled type '{field_type}' — ignored",
+                    file=sys.stderr,
+                )
         except (TypeError, ValueError) as exc:
             print(
                 f"env-auditor: warning: invalid value for '{key}' in {source}: {exc}",

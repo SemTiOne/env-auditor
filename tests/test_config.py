@@ -122,6 +122,32 @@ def test_load_pyproject_toml_no_section_returns_defaults(tmp_path):
     assert cfg.env_files == [".env.example"]
 
 
+def test_load_pyproject_toml_env_auditor_scalar_does_not_crash(tmp_path, capsys):
+    """Regression test: [tool.env-auditor] can be any TOML value, not just a
+    table, e.g. `[tool]\\nenv-auditor = "oops"` is valid, unusual TOML.
+    Previously this crashed with an uncaught AttributeError ('str' object
+    has no attribute 'items') instead of falling back to defaults with a
+    warning like every other malformed-config path does."""
+    p = tmp_path / "pyproject.toml"
+    p.write_text(
+        '[project]\nname = "x"\n\n[tool]\nenv-auditor = "oops, not a table"\n',
+        encoding="utf-8",
+    )
+    cfg = load_config(tmp_path)  # must not raise
+    assert cfg.strict is False  # defaults
+    err = capsys.readouterr().err
+    assert "not a table" in err
+
+
+def test_load_pyproject_toml_tool_scalar_does_not_crash(tmp_path):
+    """Same regression, one level up: a top-level `tool = "..."` scalar
+    (not a table at all) must also fall back to defaults, not crash."""
+    p = tmp_path / "pyproject.toml"
+    p.write_text('tool = "oops"\n\n[project]\nname = "x"\n', encoding="utf-8")
+    cfg = load_config(tmp_path)  # must not raise
+    assert cfg.strict is False
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # merge_cli_into_config
 # ──────────────────────────────────────────────────────────────────────────────

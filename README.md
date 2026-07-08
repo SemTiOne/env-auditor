@@ -98,6 +98,8 @@ ignore_keys = ["CI"]
 
 CLI flags always override config file values.
 
+`ignore_keys` excludes specific variable names from every category (undocumented, stale, missing values, required). `required_keys` is the inverse: names that must appear in at least one env file, always reported as a failure if absent, whether or not they're referenced in code (useful for infra-only vars like `DATABASE_URL` that no source file ever touches directly).
+
 ## Supported languages
 
 | Language | Detected patterns |
@@ -131,7 +133,7 @@ Dynamic references like `process.env[someVariable]` are flagged separately — t
 | Code | Meaning |
 |---|---|
 | `0` | Clean |
-| `1` | Undocumented vars found (or stale with `--strict`) |
+| `1` | Undocumented vars found, stale vars with `--strict`, or missing `required_keys` |
 | `2` | Tool error — bad args, missing files, etc. |
 
 ## CI integration

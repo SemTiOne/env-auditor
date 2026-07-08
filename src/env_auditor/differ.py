@@ -7,7 +7,12 @@ from dataclasses import dataclass
 class DiffResult:
     """Result of diffing code references against documented env files.
 
-    All sets contain env var names as strings.
+    All fields contain env var names as strings. ``undocumented`` and
+    ``stale`` are disjoint by construction (each is a one-sided set
+    difference of the same two sets). ``missing_values`` is independent of
+    both and can overlap with ``stale``, a variable can be simultaneously
+    declared with an empty value and unreferenced anywhere in code; both
+    facts are worth surfacing rather than merged into one category.
     """
 
     undocumented: frozenset[str]
@@ -38,7 +43,10 @@ def diff_keys(
         empty_keys: Subset of documented_keys whose value is empty string.
 
     Returns:
-        DiffResult with three disjoint sets.
+        DiffResult with undocumented/stale/missing_values populated.
+        required_missing stays at its default (empty). required_keys
+        enforcement happens in cli.py, which has the ignore_keys context
+        needed to compute it; diff_keys itself has no config access.
     """
     undocumented = code_keys - documented_keys
     stale = documented_keys - code_keys
