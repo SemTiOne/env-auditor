@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-15
+
 > Note: versions 0.1.1–0.1.4 shipped (see pyproject.toml) without corresponding
 > entries here. Those changes (project rename to env-auditor, CRLF injection
 > fix in `sanitize_raw`, `output_format` validation, `.gitattributes`) are not
