@@ -98,7 +98,7 @@ ignore_keys = ["CI"]
 
 CLI flags always override config file values.
 
-`ignore_keys` excludes specific variable names from every category (undocumented, stale, missing values, required). `required_keys` is the inverse: names that must appear in at least one env file, always reported as a failure if absent, whether or not they're referenced in code (useful for infra-only vars like `DATABASE_URL` that no source file ever touches directly).
+`ignore_keys` excludes specific variable names from every category (undocumented, stale, missing values, required). `required_keys` is the inverse: names that must appear in at least one env file — always reported as a failure if absent, whether or not they're referenced in code (useful for infra-only vars like `DATABASE_URL` that no source file ever touches directly).
 
 ## Supported languages
 
