@@ -40,7 +40,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Root directory to scan. Defaults to current directory.",
     )
     parser.add_argument(
-        "--env",
+        "--env", chess review bot
         metavar="FILE",
         action="append",
         dest="env_files",
