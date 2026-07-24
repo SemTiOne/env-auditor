@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/env-auditor.svg)](https://pypi.org/project/env-auditor/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Audit environment variable consistency across your codebase.** Finds vars used in code but missing from `.env.example`, stale vars nobody references anymore, and required vars with no default value — in any language.
+**Audit environment variable consistency across your codebase.** Finds vars used in code but missing from `.env.example`, stale vars nobody references anymore, and required vars with no default value; in any language.
 
 ```
 $ env-auditor .
@@ -98,7 +98,7 @@ ignore_keys = ["CI"]
 
 CLI flags always override config file values.
 
-`ignore_keys` excludes specific variable names from every category (undocumented, stale, missing values, required). `required_keys` is the inverse: names that must appear in at least one env file — always reported as a failure if absent, whether or not they're referenced in code (useful for infra-only vars like `DATABASE_URL` that no source file ever touches directly).
+`ignore_keys` excludes specific variable names from every category (undocumented, stale, missing values, required). `required_keys` is the inverse: names that must appear in at least one env file; always reported as a failure if absent, whether or not they're referenced in code (useful for infra-only vars like `DATABASE_URL` that no source file ever touches directly).
 
 ## Supported languages
 
@@ -111,7 +111,7 @@ CLI flags always override config file values.
 | Docker | `ENV VAR`, `ARG VAR` in Dockerfiles |
 | Ruby | `ENV['VAR']`, `ENV["VAR"]`, `ENV.fetch('VAR')` |
 
-Dynamic references like `process.env[someVariable]` are flagged separately — they can't be statically audited.
+Dynamic references like `process.env[someVariable]` are flagged separately, they can't be statically audited.
 
 ## CLI reference
 
@@ -175,8 +175,8 @@ For monorepos, run per-service:
 - Symlinks are never followed
 - Files over 1 MB are skipped (with a warning)
 - Lines over 2000 characters are skipped (ReDoS protection)
-- `--exclude` paths are validated to be within the scan root — path traversal rejected
-- Actual `.env` values are never stored, logged, or printed — only key names
+- `--exclude` paths are validated to be within the scan root; path traversal rejected
+- Actual `.env` values are never stored, logged, or printed; only key names
 - No network calls, no telemetry, entirely local
 
 ## Development
