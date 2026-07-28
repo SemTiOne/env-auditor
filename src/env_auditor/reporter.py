@@ -96,10 +96,7 @@ def render_text(
             f" (runtime key construction — cannot audit statically){c.RESET}"
         )
         for ref in scan.dynamic_refs:
-            lines.append(
-                f"   {c.DIM}{ref.file}:{ref.line}{c.RESET}"
-                f"  →  {ref.raw}"
-            )
+            lines.append(f"   {c.DIM}{ref.file}:{ref.line}{c.RESET}  →  {ref.raw}")
         lines.append("")
 
     lines.append(sep)
@@ -143,16 +140,14 @@ def render_json(
         {
             "key": key,
             "occurrences": [
-                {"file": o.file, "line": o.line}
-                for o in scan.references.get(key, [])
+                {"file": o.file, "line": o.line} for o in scan.references.get(key, [])
             ],
         }
         for key in undoc
     ]
 
     dynamic_list = [
-        {"file": r.file, "line": r.line, "raw": r.raw}
-        for r in scan.dynamic_refs
+        {"file": r.file, "line": r.line, "raw": r.raw} for r in scan.dynamic_refs
     ]
 
     payload: dict[str, Any] = {
@@ -161,7 +156,9 @@ def render_json(
             "undocumented": len(undoc),
             "required_missing": len(req_missing),
             "stale": len(diff.stale - ignore_keys) if not ignore_stale else 0,
-            "missing_values": len(diff.missing_values - ignore_keys) if not ignore_missing else 0,
+            "missing_values": len(diff.missing_values - ignore_keys)
+            if not ignore_missing
+            else 0,
             "dynamic_refs": len(scan.dynamic_refs),
         },
         "undocumented": undocumented_list,

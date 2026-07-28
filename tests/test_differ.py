@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import pytest
 
-from env_auditor.differ import diff_keys, DiffResult
+from env_auditor.differ import diff_keys
 
 
 def test_undocumented_keys():
@@ -89,6 +88,7 @@ def test_returns_frozensets():
 # Reporter ignore_keys integration
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_ignore_keys_removes_from_undocumented():
     from env_auditor.differ import diff_keys
     from env_auditor.scanner import ScanResult
@@ -100,7 +100,9 @@ def test_ignore_keys_removes_from_undocumented():
     diff = diff_keys(code, documented, frozenset())
     scan = ScanResult()
 
-    text = render_text(diff, scan, passed=True, use_color=False, ignore_keys={"IGNORED"})
+    text = render_text(
+        diff, scan, passed=True, use_color=False, ignore_keys={"IGNORED"}
+    )
     assert "IGNORED" not in text
     assert "No undocumented" in text
 
@@ -119,5 +121,7 @@ def test_ignore_keys_removes_from_stale():
     diff = diff_keys(code, documented, frozenset())
     scan = ScanResult()
 
-    text = render_text(diff, scan, passed=True, use_color=False, ignore_keys={"STALE_BUT_IGNORED"})
+    text = render_text(
+        diff, scan, passed=True, use_color=False, ignore_keys={"STALE_BUT_IGNORED"}
+    )
     assert "STALE_BUT_IGNORED" not in text

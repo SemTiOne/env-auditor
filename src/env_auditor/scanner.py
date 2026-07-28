@@ -34,9 +34,9 @@ _VALID_VAR_RE: re.Pattern[str] = re.compile(r"^[A-Z][A-Z0-9_]*$")
 # Matches any ANSI escape sequence or non-printable control character.
 # Used to sanitize raw dynamic references before printing to the terminal.
 _ANSI_AND_CTRL_RE: re.Pattern[str] = re.compile(
-    r"\x1b\[[0-9;]*[A-Za-z]"   # ANSI CSI sequences  e.g. \x1b[31m
-    r"|\x1b[()][AB012]"         # ANSI character set  e.g. \x1b(B
-    r"|\x1b[^[]"                # Other ESC sequences
+    r"\x1b\[[0-9;]*[A-Za-z]"  # ANSI CSI sequences  e.g. \x1b[31m
+    r"|\x1b[()][AB012]"  # ANSI character set  e.g. \x1b(B
+    r"|\x1b[^[]"  # Other ESC sequences
     r"|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\r\n]"  # Control chars incl CR+LF (CRLF injection)
 )
 

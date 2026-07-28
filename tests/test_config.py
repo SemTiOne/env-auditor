@@ -3,7 +3,6 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-import pytest
 
 from env_auditor.config import (
     CONFIG_FILE_SIZE_LIMIT,
@@ -21,6 +20,7 @@ from env_auditor.config import (
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def write_rc(tmp_path: Path, content: str, name: str = ".env-auditorrc") -> Path:
     p = tmp_path / name
     p.write_text(textwrap.dedent(content), encoding="utf-8")
@@ -30,6 +30,7 @@ def write_rc(tmp_path: Path, content: str, name: str = ".env-auditorrc") -> Path
 # ──────────────────────────────────────────────────────────────────────────────
 # Default config
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def test_load_config_no_file_returns_defaults(tmp_path):
     cfg = load_config(tmp_path)
@@ -43,12 +44,16 @@ def test_load_config_no_file_returns_defaults(tmp_path):
 # .env-auditorrc parsing
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_load_envcheckrc_basic(tmp_path):
-    write_rc(tmp_path, """
+    write_rc(
+        tmp_path,
+        """
         strict = true
         ignore_stale = true
         format = "json"
-    """)
+    """,
+    )
     cfg = load_config(tmp_path)
     assert cfg.strict is True
     assert cfg.ignore_stale is True
@@ -90,11 +95,14 @@ def test_load_envcheckrc_unknown_key_warns(tmp_path, capsys):
 
 
 def test_load_envcheckrc_comments_ignored(tmp_path):
-    write_rc(tmp_path, """
+    write_rc(
+        tmp_path,
+        """
         # This is a comment
         strict = true
         # ignore_stale = true
-    """)
+    """,
+    )
     cfg = load_config(tmp_path)
     assert cfg.strict is True
     assert cfg.ignore_stale is False
@@ -103,6 +111,7 @@ def test_load_envcheckrc_comments_ignored(tmp_path):
 # ──────────────────────────────────────────────────────────────────────────────
 # pyproject.toml [tool.env-auditor]
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def test_load_pyproject_toml_section(tmp_path):
     p = tmp_path / "pyproject.toml"
@@ -152,6 +161,7 @@ def test_load_pyproject_toml_tool_scalar_does_not_crash(tmp_path):
 # merge_cli_into_config
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_merge_cli_overrides_env_files():
     cfg = EnvAuditorConfig(env_files=[".env.example"])
     merged = merge_cli_into_config(cfg, env_files=[".env.production"])
@@ -198,6 +208,7 @@ def test_merge_cli_ignore_missing():
 # ──────────────────────────────────────────────────────────────────────────────
 # _minimal_toml_parse
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def test_minimal_toml_parse_string(tmp_path):
     p = write_rc(tmp_path, 'format = "json"\n')
@@ -296,6 +307,7 @@ def test_parse_toml_file_pyproject_via_fallback_parser(tmp_path, monkeypatch):
 # _dict_to_config
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_dict_to_config_valid(tmp_path):
     p = tmp_path / ".env-auditorrc"
     cfg = _dict_to_config({"strict": True, "output_format": "json"}, p)
@@ -325,6 +337,7 @@ def test_dict_to_config_wrong_type_list_value_warns(tmp_path, capsys):
 # load_config_from_file (explicit --config FILE)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_load_config_from_file_reads_nonstandard_filename(tmp_path):
     """Regression test for Bug 2: --config myconfig.toml (a name not in
     CONFIG_FILENAMES) must actually be parsed, not silently ignored in favor
@@ -346,7 +359,7 @@ def test_load_config_from_file_no_section_warns_and_defaults(tmp_path, capsys):
     """A file explicitly named pyproject.toml but lacking [tool.env-auditor]
     must warn and fall back to defaults, same as auto-discovery would."""
     p = tmp_path / "pyproject.toml"
-    p.write_text("[build-system]\nrequires = [\"hatchling\"]\n", encoding="utf-8")
+    p.write_text('[build-system]\nrequires = ["hatchling"]\n', encoding="utf-8")
     cfg = load_config_from_file(p)
     err = capsys.readouterr().err
     assert "no [tool.env-auditor] section" in err
@@ -355,7 +368,10 @@ def test_load_config_from_file_no_section_warns_and_defaults(tmp_path, capsys):
 
 def test_load_config_from_file_oversized_warns_and_defaults(tmp_path, capsys):
     p = tmp_path / "myconfig.toml"
-    p.write_text("strict = true\n" + "# padding\n" * (CONFIG_FILE_SIZE_LIMIT // 10), encoding="utf-8")
+    p.write_text(
+        "strict = true\n" + "# padding\n" * (CONFIG_FILE_SIZE_LIMIT // 10),
+        encoding="utf-8",
+    )
     cfg = load_config_from_file(p)
     err = capsys.readouterr().err
     assert "size limit" in err
@@ -367,7 +383,7 @@ def test_load_config_from_file_pyproject_named_file(tmp_path):
     which case it must still be read as a [tool.env-auditor] section, not
     as a flat .env-auditorrc-style file."""
     p = tmp_path / "pyproject.toml"
-    p.write_text('[tool.env-auditor]\nstrict = true\n', encoding="utf-8")
+    p.write_text("[tool.env-auditor]\nstrict = true\n", encoding="utf-8")
     cfg = load_config_from_file(p)
     assert cfg.strict is True
 
@@ -376,8 +392,9 @@ def test_load_config_from_file_pyproject_named_file(tmp_path):
 # env_auditor.toml filename
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_load_envcheck_toml_filename(tmp_path):
     p = tmp_path / "env-auditor.toml"
-    p.write_text('strict = true\n', encoding="utf-8")
+    p.write_text("strict = true\n", encoding="utf-8")
     cfg = load_config(tmp_path)
     assert cfg.strict is True

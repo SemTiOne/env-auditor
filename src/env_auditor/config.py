@@ -171,11 +171,13 @@ def _parse_toml_file(path: Path, is_pyproject: bool) -> Optional[dict[str, Any]]
     """
     try:
         import tomllib  # Python 3.11+
+
         with open(path, "rb") as f:
             data = tomllib.load(f)
     except ImportError:
         try:
             import tomli as tomllib  # type: ignore[no-redef]
+
             with open(path, "rb") as f:
                 data = tomllib.load(f)
         except ImportError:
@@ -218,7 +220,7 @@ def _minimal_toml_parse(path: Path) -> dict[str, Any]:
         Nested dict of parsed key/value pairs.
     """
     result: dict[str, Any] = {}
-    current_node: dict[str, Any] = result   # pointer into result at the current section
+    current_node: dict[str, Any] = result  # pointer into result at the current section
     text = path.read_text(encoding="utf-8", errors="replace")
 
     for raw_line in text.splitlines():
@@ -228,10 +230,7 @@ def _minimal_toml_parse(path: Path) -> dict[str, Any]:
 
         if line.startswith("[") and line.endswith("]"):
             section_str = line[1:-1].strip()
-            parts = [
-                p.strip().strip('"').strip("'")
-                for p in section_str.split(".")
-            ]
+            parts = [p.strip().strip('"').strip("'") for p in section_str.split(".")]
             current_node = result
             for part in parts:
                 current_node = current_node.setdefault(part, {})
@@ -290,9 +289,7 @@ def _dict_to_config(raw: dict[str, Any], source: Path) -> EnvAuditorConfig:
             )
             continue
 
-        field_type = str(
-            EnvAuditorConfig.__dataclass_fields__[key].type
-        )
+        field_type = str(EnvAuditorConfig.__dataclass_fields__[key].type)
 
         try:
             if "bool" in field_type:

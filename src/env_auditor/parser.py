@@ -128,6 +128,7 @@ def parse_env_files(paths: list[Path]) -> ParsedEnvFile:
 # Internal helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _strip_quotes(value: str) -> str:
     """Remove matching surrounding single or double quotes from *value*."""
     if len(value) >= 2:

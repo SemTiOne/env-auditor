@@ -24,6 +24,7 @@ from env_auditor.scanner import scan_directory
 # Argument parser
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build and return the CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -115,6 +116,7 @@ def _build_parser() -> argparse.ArgumentParser:
 # ──────────────────────────────────────────────────────────────────────────────
 # Path validation
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def _resolve_scan_root(raw_path: str) -> Path:
     """Resolve and validate the scan root directory.
@@ -224,6 +226,7 @@ def _die(msg: str) -> NoReturn:
 # Config loading
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _build_config(args: argparse.Namespace, scan_root: Path) -> EnvAuditorConfig:
     """Load config file and apply CLI overrides on top.
 
@@ -259,6 +262,7 @@ def _build_config(args: argparse.Namespace, scan_root: Path) -> EnvAuditorConfig
 # ──────────────────────────────────────────────────────────────────────────────
 # Audit pipeline
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def _run_audit(
     scan_root: Path,
@@ -351,6 +355,7 @@ def _run_audit(
 # ──────────────────────────────────────────────────────────────────────────────
 # Entry point
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def main(argv: Optional[list[str]] = None) -> None:
     """Parse arguments, run the audit, and exit with the appropriate code.

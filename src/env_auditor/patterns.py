@@ -137,8 +137,21 @@ DOCKERFILE_PATTERN: LanguagePattern = next(
 # Names that are almost always false positives in shell patterns
 SHELL_NOISE: frozenset[str] = frozenset(
     {
-        "PATH", "HOME", "USER", "SHELL", "PWD", "TERM",
-        "LANG", "LC_ALL", "IFS", "PS1", "PS2", "OLDPWD",
-        "SHLVL", "LOGNAME", "MAIL", "HOSTNAME",
+        "PATH",
+        "HOME",
+        "USER",
+        "SHELL",
+        "PWD",
+        "TERM",
+        "LANG",
+        "LC_ALL",
+        "IFS",
+        "PS1",
+        "PS2",
+        "OLDPWD",
+        "SHLVL",
+        "LOGNAME",
+        "MAIL",
+        "HOSTNAME",
     }
 )
