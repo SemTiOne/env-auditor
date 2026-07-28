@@ -8,6 +8,7 @@ importantly, is the only test in the suite that verifies `python -m
 env_auditor` actually works, since importing env_auditor.cli directly
 would not have caught a broken __main__.py (e.g. a typo in its import).
 """
+
 from __future__ import annotations
 
 import os
@@ -19,7 +20,9 @@ from pathlib import Path
 import pytest
 
 
-def test_dunder_main_runs_in_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_dunder_main_runs_in_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Execute __main__.py in-process via runpy so coverage.py can actually
     measure it (a subprocess, as used below, runs outside the coverage
     instrumentation of the test process and would otherwise leave these two

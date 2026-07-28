@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -12,6 +11,7 @@ from env_auditor.scanner import scan_directory, FILE_SIZE_LIMIT
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def make_file(path: Path, content: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
@@ -21,6 +21,7 @@ def make_file(path: Path, content: str) -> Path:
 # ──────────────────────────────────────────────────────────────────────────────
 # JavaScript / TypeScript
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def test_js_dot_notation(tmp_path):
     make_file(tmp_path / "app.js", "const x = process.env.MY_KEY;\n")
@@ -57,6 +58,7 @@ def test_js_dynamic_ref_flagged(tmp_path):
 # Python
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_py_environ_bracket(tmp_path):
     make_file(tmp_path / "db.py", "url = os.environ['DB_URL']\n")
     result = scan_directory(tmp_path)
@@ -85,6 +87,7 @@ def test_py_dynamic_ref_flagged(tmp_path):
 # Go
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_go_getenv(tmp_path):
     make_file(tmp_path / "main.go", 'url := os.Getenv("GO_URL")\n')
     result = scan_directory(tmp_path)
@@ -100,6 +103,7 @@ def test_go_lookupenv(tmp_path):
 # ──────────────────────────────────────────────────────────────────────────────
 # Ruby
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def test_ruby_env_bracket(tmp_path):
     make_file(tmp_path / "app.rb", "key = ENV['RUBY_KEY']\n")
@@ -117,6 +121,7 @@ def test_ruby_env_fetch(tmp_path):
 # Shell
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_shell_brace_syntax(tmp_path):
     make_file(tmp_path / "deploy.sh", "echo ${MY_SECRET}\n")
     result = scan_directory(tmp_path)
@@ -132,6 +137,7 @@ def test_shell_dollar_syntax(tmp_path):
 # ──────────────────────────────────────────────────────────────────────────────
 # Docker
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def test_dockerfile_env(tmp_path):
     make_file(tmp_path / "Dockerfile", "ENV DOCKER_VAR=default\n")
@@ -191,8 +197,7 @@ def test_extensionless_non_dockerfile_not_scanned_with_docker_patterns(tmp_path)
     an uppercase identifier must not be reported as an application env var."""
     make_file(
         tmp_path / "Makefile",
-        "ENV DEPLOY_TARGET=production\n"
-        "ARG RELEASE_VERSION=1.0\n",
+        "ENV DEPLOY_TARGET=production\nARG RELEASE_VERSION=1.0\n",
     )
     result = scan_directory(tmp_path)
     assert "DEPLOY_TARGET" not in result.all_keys
@@ -202,6 +207,7 @@ def test_extensionless_non_dockerfile_not_scanned_with_docker_patterns(tmp_path)
 # ──────────────────────────────────────────────────────────────────────────────
 # Exclusion behavior
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def test_node_modules_excluded(tmp_path):
     make_file(tmp_path / "node_modules" / "lib.js", "process.env.HIDDEN_KEY\n")
@@ -232,7 +238,9 @@ def test_extra_exclude_matches_path_not_basename(tmp_path):
     test: --exclude src/vendor previously also excluded root-level vendor/
     because exclusion matched on directory name alone, not full path."""
     make_file(tmp_path / "vendor" / "lib.py", 'os.environ["ROOT_VENDOR_KEY"]\n')
-    make_file(tmp_path / "src" / "vendor" / "other.py", 'os.environ["SRC_VENDOR_KEY"]\n')
+    make_file(
+        tmp_path / "src" / "vendor" / "other.py", 'os.environ["SRC_VENDOR_KEY"]\n'
+    )
     extra = [tmp_path / "src" / "vendor"]
     result = scan_directory(tmp_path, extra_exclude=extra)
     assert "ROOT_VENDOR_KEY" in result.all_keys, (
@@ -245,6 +253,7 @@ def test_extra_exclude_matches_path_not_basename(tmp_path):
 # Large file skip
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_large_file_skipped(tmp_path):
     big = tmp_path / "big.py"
     big.write_bytes(b"os.environ['HUGE_KEY']\n" + b"x" * (FILE_SIZE_LIMIT + 1))
@@ -256,6 +265,7 @@ def test_large_file_skipped(tmp_path):
 # ──────────────────────────────────────────────────────────────────────────────
 # Symlink handling
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def test_symlink_file_skipped(tmp_path):
     real = tmp_path / "real.py"
@@ -279,7 +289,9 @@ def test_symlink_file_skipped(tmp_path):
 def test_symlink_dir_skipped(tmp_path):
     real_dir = tmp_path / "real_dir"
     real_dir.mkdir()
-    (real_dir / "secret.py").write_text('os.environ["SYMLINK_SECRET"]\n', encoding="utf-8")
+    (real_dir / "secret.py").write_text(
+        'os.environ["SYMLINK_SECRET"]\n', encoding="utf-8"
+    )
     link_dir = tmp_path / "linked_dir"
     try:
         link_dir.symlink_to(real_dir)
@@ -296,9 +308,11 @@ def test_symlink_dir_skipped(tmp_path):
 # Unreadable file
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_unreadable_file_handled_gracefully(tmp_path):
     import os as _os
     import sys
+
     if sys.platform == "win32":
         pytest.skip("chmod file locking not reliable on Windows")
     if hasattr(_os, "getuid") and _os.getuid() == 0:
@@ -318,6 +332,7 @@ def test_unreadable_file_handled_gracefully(tmp_path):
 # Lowercase names not matched
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_lowercase_names_ignored(tmp_path):
     make_file(tmp_path / "app.py", 'os.environ["lowercase_key"]\n')
     result = scan_directory(tmp_path)
@@ -328,9 +343,11 @@ def test_lowercase_names_ignored(tmp_path):
 # Integration: sample project fixture
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_sample_project(tmp_path):
     """Integration test using the sample_project fixture."""
     from pathlib import Path
+
     fixture = Path(__file__).parent / "fixtures" / "sample_project"
     if not fixture.exists():
         pytest.skip("sample_project fixture not found")
@@ -348,12 +365,10 @@ def test_sample_project(tmp_path):
 # Coverage: error path stubs (no chmod required)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def test_nonexistent_file_stat_skipped(tmp_path, monkeypatch):
     """Files that disappear between walk and stat are handled gracefully."""
     import env_auditor.scanner as sc
-    from pathlib import Path
-
-    original_scan_file = sc._scan_file
 
     def fake_stat(self):
         raise OSError("no such file")
@@ -393,6 +408,7 @@ def test_scan_file_unicode_error_handled(tmp_path, monkeypatch):
 # ──────────────────────────────────────────────────────────────────────────────
 # ReDoS protection
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def test_very_long_line_skipped(tmp_path):
     """Lines over 2000 chars are skipped to prevent ReDoS."""

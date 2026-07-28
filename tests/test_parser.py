@@ -5,12 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from env_auditor.parser import parse_env_file, parse_env_files, ParsedEnvFile
+from env_auditor.parser import parse_env_file, parse_env_files
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def write_env(tmp_path: Path, content: str, name: str = ".env.example") -> Path:
     p = tmp_path / name
@@ -21,6 +22,7 @@ def write_env(tmp_path: Path, content: str, name: str = ".env.example") -> Path:
 # ──────────────────────────────────────────────────────────────────────────────
 # Basic parsing
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def test_simple_key_value(tmp_path):
     p = write_env(tmp_path, "FOO=bar\n")
@@ -108,6 +110,7 @@ def test_invalid_key_skipped(tmp_path):
 def test_unreadable_file_returns_none(tmp_path):
     import os
     import sys
+
     if sys.platform == "win32":
         pytest.skip("chmod file locking not reliable on Windows")
     if hasattr(os, "getuid") and os.getuid() == 0:
@@ -125,6 +128,7 @@ def test_unreadable_file_returns_none(tmp_path):
 # ──────────────────────────────────────────────────────────────────────────────
 # Multi-file merge
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def test_merge_two_files(tmp_path):
     p1 = write_env(tmp_path, "FOO=foo\n", "a.env")
