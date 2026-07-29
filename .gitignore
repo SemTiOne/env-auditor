@@ -30,6 +30,7 @@ PKG-INFO
 .coverage
 .coverage.*
 coverage.xml
+junit.xml
 htmlcov/
 
 # Type checking
