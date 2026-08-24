@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from env_auditor.differ import diff_keys
 
 
@@ -90,10 +89,11 @@ def test_returns_frozensets():
 
 
 def test_ignore_keys_removes_from_undocumented():
-    from env_auditor.differ import diff_keys
-    from env_auditor.scanner import ScanResult
-    from env_auditor.reporter import render_text, render_json
     import json
+
+    from env_auditor.differ import diff_keys
+    from env_auditor.reporter import render_json, render_text
+    from env_auditor.scanner import ScanResult
 
     code = frozenset({"FOO", "IGNORED"})
     documented = frozenset({"FOO"})
@@ -113,8 +113,8 @@ def test_ignore_keys_removes_from_undocumented():
 
 def test_ignore_keys_removes_from_stale():
     from env_auditor.differ import diff_keys
-    from env_auditor.scanner import ScanResult
     from env_auditor.reporter import render_text
+    from env_auditor.scanner import ScanResult
 
     code = frozenset({"FOO"})
     documented = frozenset({"FOO", "STALE_BUT_IGNORED"})

@@ -3,7 +3,6 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-
 from env_auditor.config import (
     CONFIG_FILE_SIZE_LIMIT,
     EnvAuditorConfig,
@@ -14,7 +13,6 @@ from env_auditor.config import (
     load_config_from_file,
     merge_cli_into_config,
 )
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers

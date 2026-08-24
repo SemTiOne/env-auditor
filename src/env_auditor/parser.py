@@ -4,7 +4,6 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 # Pre-compiled constants — never constructed from user input.
 _VALID_KEY_RE: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -37,7 +36,7 @@ class ParsedEnvFile:
         return frozenset(k for k, v in self.keys_with_values.items() if v == "")
 
 
-def parse_env_file(path: Path) -> Optional[ParsedEnvFile]:
+def parse_env_file(path: Path) -> ParsedEnvFile | None:
     """Parse a dotenv-format file and return its keys.
 
     Sensitive value protection: values are stored only to detect emptiness.

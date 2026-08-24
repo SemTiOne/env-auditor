@@ -5,7 +5,6 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from env_auditor.patterns import (
     DOCKERFILE_PATTERN,
@@ -109,7 +108,7 @@ def sanitize_raw(text: str) -> str:
 
 def scan_directory(
     root: Path,
-    extra_exclude: Optional[list[Path]] = None,
+    extra_exclude: list[Path] | None = None,
 ) -> ScanResult:
     """Walk *root* recursively and extract all env var references.
 
