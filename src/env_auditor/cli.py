@@ -4,7 +4,7 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from typing import NoReturn, Optional
+from typing import NoReturn
 
 from env_auditor import __version__
 from env_auditor.colors import supports_color
@@ -18,7 +18,6 @@ from env_auditor.differ import DiffResult, diff_keys
 from env_auditor.parser import parse_env_files
 from env_auditor.reporter import render_json, render_text
 from env_auditor.scanner import scan_directory
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Argument parser
@@ -130,7 +129,7 @@ def _resolve_scan_root(raw_path: str) -> Path:
     Raises:
         SystemExit(2): If the path does not exist or is not a directory.
     """
-    resolved: Optional[Path] = None
+    resolved: Path | None = None
     try:
         resolved = Path(raw_path).resolve()
     except (OSError, ValueError) as exc:
@@ -319,9 +318,7 @@ def _run_audit(
     # "Result: PASS" while the process still exited 1.
     effective_undoc = diff.undocumented - ignore_keys
     effective_stale = diff.stale - ignore_keys
-    if effective_undoc or diff.required_missing:
-        exit_code = 1
-    elif cfg.strict and effective_stale:
+    if effective_undoc or diff.required_missing or cfg.strict and effective_stale:
         exit_code = 1
     else:
         exit_code = 0
@@ -357,7 +354,7 @@ def _run_audit(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def main(argv: Optional[list[str]] = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     """Parse arguments, run the audit, and exit with the appropriate code.
 
     Exit codes:

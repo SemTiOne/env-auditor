@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Any
 
 from env_auditor.colors import get_colors
 from env_auditor.differ import DiffResult
@@ -16,7 +16,7 @@ def render_text(
     use_color: bool = True,
     ignore_stale: bool = False,
     ignore_missing: bool = False,
-    ignore_keys: Optional[set[str]] = None,
+    ignore_keys: set[str] | None = None,
 ) -> str:
     """Render a human-readable audit report.
 
@@ -124,7 +124,7 @@ def render_json(
     passed: bool,
     ignore_stale: bool = False,
     ignore_missing: bool = False,
-    ignore_keys: Optional[set[str]] = None,
+    ignore_keys: set[str] | None = None,
 ) -> str:
     """Render a machine-readable JSON audit report.
 

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import re
 import sys
-from dataclasses import dataclass, field, replace as dataclass_replace
+from dataclasses import dataclass, field
+from dataclasses import replace as dataclass_replace
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Config file is searched in this order within the scan root.
 CONFIG_FILENAMES = (".env-auditorrc", "env-auditor.toml", "pyproject.toml")
@@ -107,7 +108,7 @@ def load_config_from_file(path: Path) -> EnvAuditorConfig:
     return _dict_to_config(raw, path)
 
 
-def _read_config_raw(path: Path) -> tuple[Optional[dict[str, Any]], bool]:
+def _read_config_raw(path: Path) -> tuple[dict[str, Any] | None, bool]:
     """Validate size, parse path as TOML, and return its env-auditor section.
 
     Shared by :func:`load_config` (auto-discovery) and
@@ -155,7 +156,7 @@ def _read_config_raw(path: Path) -> tuple[Optional[dict[str, Any]], bool]:
     return raw, False
 
 
-def _parse_toml_file(path: Path, is_pyproject: bool) -> Optional[dict[str, Any]]:
+def _parse_toml_file(path: Path, is_pyproject: bool) -> dict[str, Any] | None:
     """Parse *path* as TOML and return the env-auditor section, or None.
 
     Uses stdlib ``tomllib`` (Python 3.11+) with ``tomli`` fallback,
@@ -250,9 +251,12 @@ def _minimal_toml_parse(path: Path) -> dict[str, Any]:
         elif value.startswith("["):
             # Use pre-compiled regex — not constructed from user input
             current_node[key] = _LIST_ITEMS_RE.findall(value)
-        elif value.startswith('"') and value.endswith('"'):
-            current_node[key] = value[1:-1]
-        elif value.startswith("'") and value.endswith("'"):
+        elif (
+            value.startswith('"')
+            and value.endswith('"')
+            or value.startswith("'")
+            and value.endswith("'")
+        ):
             current_node[key] = value[1:-1]
         else:
             current_node[key] = value
@@ -340,12 +344,12 @@ def _dict_to_config(raw: dict[str, Any], source: Path) -> EnvAuditorConfig:
 def merge_cli_into_config(
     cfg: EnvAuditorConfig,
     *,
-    env_files: Optional[list[str]] = None,
-    exclude_dirs: Optional[list[str]] = None,
-    ignore_stale: Optional[bool] = None,
-    ignore_missing: Optional[bool] = None,
-    strict: Optional[bool] = None,
-    output_format: Optional[str] = None,
+    env_files: list[str] | None = None,
+    exclude_dirs: list[str] | None = None,
+    ignore_stale: bool | None = None,
+    ignore_missing: bool | None = None,
+    strict: bool | None = None,
+    output_format: str | None = None,
 ) -> EnvAuditorConfig:
     """Apply CLI overrides onto *cfg*, returning a new merged config.
 
