@@ -4,8 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from env_auditor.scanner import scan_directory, FILE_SIZE_LIMIT
-
+from env_auditor.scanner import FILE_SIZE_LIMIT, scan_directory
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -382,8 +381,9 @@ def test_nonexistent_file_stat_skipped(tmp_path, monkeypatch):
 
 def test_scan_file_unicode_error_handled(tmp_path, monkeypatch):
     """Files that raise on read are skipped and logged."""
-    import env_auditor.scanner as sc
     from pathlib import Path
+
+    import env_auditor.scanner as sc
 
     p = tmp_path / "bad.py"
     p.write_text('os.environ["GOOD_KEY"]\n', encoding="utf-8")

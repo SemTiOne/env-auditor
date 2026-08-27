@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from env_auditor.colors import Colors, NoColors, get_colors, supports_color
 
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Optional, Sequence
 
 # Env var name: uppercase, starts with letter, underscores/digits allowed
 ENV_VAR_NAME = r"([A-Z][A-Z0-9_]*)"
@@ -20,7 +20,7 @@ class LanguagePattern:
     extensions: Sequence[str]
     static_patterns: Sequence[re.Pattern[str]]
     dynamic_patterns: Sequence[re.Pattern[str]] = field(default_factory=list)
-    line_filter: Optional[re.Pattern[str]] = None
+    line_filter: re.Pattern[str] | None = None
     """If set, static_patterns/dynamic_patterns are only applied to lines that
     match this filter first. Used by Docker: the KEY= continuation pattern
     (which has no anchor of its own) must not fire on RUN/LABEL/CMD lines that
